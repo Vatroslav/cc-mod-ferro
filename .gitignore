@@ -1,0 +1,3 @@
+# generirano iz tools/scene.py, samo za pregled u pregledniku
+preview/*.svg
+__pycache__/

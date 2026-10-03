@@ -1,0 +1,11 @@
+{
+  "name": "mod-ferro",
+  "owner": { "name": "Vatroslav Mileusnić" },
+  "plugins": [
+    {
+      "name": "mod-ferro",
+      "source": "./plugin",
+      "description": "Ferro trči po livadi iznad prompta dok Claude dulje radi"
+    }
+  ]
+}
