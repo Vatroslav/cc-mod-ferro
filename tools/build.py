@@ -18,13 +18,33 @@ OUT = ROOT / "assets" / "px"
 # Koliko izvornih piksela ide u jedan pravi piksel. Psi su u tri slike nacrtani u
 # različitoj veličini, pa faktor izjednačava visinu psa (trčanje 240, ostali ~220).
 FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55}
-PALETTE_SIZE = 22
+PALETTE_SIZE = 22  # boje krzna i obruba; jezik i odsjaj u oku dobiju svoju boju povrh toga
 
 
 def background_mask(rgb: np.ndarray) -> np.ndarray:
     rgb = rgb.astype(int)
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     return (r > 150) & (b > 150) & (g < 110) & (np.abs(r - b) < 90)
+
+
+def fringe_mask(rgb: np.ndarray, bg: np.ndarray) -> np.ndarray:
+    """Rub psa pomiješan s magentom (ljubičasto uz pozadinu). Bez ovoga ulazi u paletu
+    kao bordo boja, pa se pojavi kao točke po obrubu i preotme jezik i uši."""
+    rgb = rgb.astype(int)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    near = ndimage.binary_dilation(bg, iterations=3)
+    return (r - g > 40) & (b - g > 40) & near & ~bg
+
+
+def tongue_mask(rgb: np.ndarray) -> np.ndarray:
+    rgb = rgb.astype(int)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    return (r > 200) & (g < 150) & (b > 80) & (b < 170) & (r - b > 60)
+
+
+def white_mask(rgb: np.ndarray) -> np.ndarray:
+    """Odsjaj u oku: ChatGPT ga crta kao točkicu manju od jednog pravog piksela."""
+    return rgb.min(2) > 235
 
 
 def components(rgb: np.ndarray, min_area: int):
@@ -72,6 +92,35 @@ def downsample(idx: np.ndarray, factor: float, transparent: int) -> np.ndarray:
             counts[transparent] = 0
             out[y, x] = counts.argmax()
     return out
+
+
+def catchlights(px: np.ndarray, white: np.ndarray, factor: float, white_i: int, dark: set) -> None:
+    """Svaki odsjaj iz izvora postane jedan bijeli piksel, ako pada na tamno (oko).
+    Smanjivanje ga inače izgubi jer u svom bloku nikad nije najčešća boja."""
+    lab, k = ndimage.label(white)
+    for cy, cx in ndimage.center_of_mass(white, lab, range(1, k + 1)):
+        y, x = int(cy / factor), int(cx / factor)
+        if y < px.shape[0] and x < px.shape[1] and px[y, x] in dark:
+            px[y, x] = white_i
+
+
+def clean_edges(px: np.ndarray, transparent: int, dark: set, protect: set, outline: int) -> None:
+    """Ispegla rub: makne zalutale piksele i bočne izbočine od jednog piksela (cik-cak po rubu),
+    pa zatvori obrub gdje ga je smanjivanje probilo (krzno uz pozadinu postane obrub).
+    Okomite izbočine ostaju jer su to vrhovi ušiju. Jezik i odsjaj se ne diraju."""
+
+    def sides(solid: np.ndarray) -> list[np.ndarray]:
+        p = np.pad(solid, 1)  # izvan crteža je pozadina, pa i tabani dobiju obrub
+        return [p[:-2, 1:-1], p[2:, 1:-1], p[1:-1, :-2], p[1:-1, 2:]]
+
+    solid = px != transparent
+    up, down, left, right = sides(solid)
+    count = up.astype(int) + down + left + right
+    bump = (count == 0) | ((count == 1) & (left | right))
+    px[solid & bump & ~np.isin(px, list(protect))] = transparent
+    solid = px != transparent
+    surrounded = np.logical_and.reduce(sides(solid))
+    px[solid & ~surrounded & ~np.isin(px, list(dark | protect))] = outline
 
 
 MEADOW_FX, MEADOW_FY = 10.0, 9.3  # livada nema kvadratne "piksele"
@@ -159,26 +208,43 @@ def main() -> None:
     (OUT / "meadow.json").write_text(json.dumps(meadow()))
     sheets = {n: np.asarray(Image.open(SRC / f"{n}.png").convert("RGB")) for n in FACTOR}
 
-    # Zajednička paleta iz svih piksela psa u svim slikama.
-    fg_pixels = np.concatenate([s[~background_mask(s)] for s in sheets.values()])
+    bgs = {n: background_mask(s) for n, s in sheets.items()}
+    bgs = {n: bg | fringe_mask(sheets[n], bg) for n, bg in bgs.items()}
+
+    # Zajednička paleta iz svih piksela psa u svim slikama. Jezik i odsjaj imaju premalo
+    # piksela da bi im median cut dao boju, pa dobiju svoju povrh PALETTE_SIZE.
+    def pixels(mask_of) -> np.ndarray:
+        return np.concatenate([s[mask_of(s) & ~bgs[n]] for n, s in sheets.items()])
+
+    fg_pixels = pixels(lambda s: ~tongue_mask(s) & ~white_mask(s))
     sample = fg_pixels[:: max(1, len(fg_pixels) // 200_000)]
+    # k-means dorada: bez nje median cut izgubi neutralnu tamnosivu, pa sedlo dobije smeđe mrlje
     pal_img = Image.fromarray(sample.reshape(1, -1, 3).astype(np.uint8)).quantize(
-        PALETTE_SIZE, method=Image.Quantize.MEDIANCUT
+        PALETTE_SIZE, method=Image.Quantize.MEDIANCUT, kmeans=20
     )
     palette = np.array(pal_img.getpalette()[: PALETTE_SIZE * 3]).reshape(-1, 3)
-    transparent = PALETTE_SIZE
+    tongue_i, white_i, transparent = PALETTE_SIZE, PALETTE_SIZE + 1, PALETTE_SIZE + 2
+    palette = np.vstack(
+        [palette, pixels(tongue_mask).mean(0).round(), pixels(white_mask).mean(0).round()]
+    ).astype(int)
+    dark = {i for i, p in enumerate(palette) if p.sum() < 200}  # obrub, nos, oči
+    outline = int(palette[:PALETTE_SIZE].sum(1).argmin())
+    print("jezik", palette[tongue_i], "odsjaj", palette[white_i])
 
     for name, rgb in sheets.items():
-        bg = background_mask(rgb)
+        bg = bgs[name]
         flat = rgb.reshape(-1, 3).astype(int)
-        # najbliža boja palete za svaki izvorni piksel
+        # najbliža boja krzna za svaki izvorni piksel; jezik i odsjaj samo gdje su nacrtani
         best = np.zeros(len(flat), dtype=np.int16)
         best_d = np.full(len(flat), 1 << 30)
-        for i, p in enumerate(palette):
+        for i, p in enumerate(palette[:PALETTE_SIZE]):
             d = ((flat - p) ** 2).sum(1)
             better = d < best_d
             best[better], best_d[better] = i, d[better]
         idx = best.reshape(bg.shape)
+        idx[tongue_mask(rgb)] = tongue_i
+        white = white_mask(rgb)
+        idx[white] = white_i
         idx[bg] = transparent
 
         found = components(rgb, 400)
@@ -188,18 +254,22 @@ def main() -> None:
             crop = idx[box].copy()
             crop[~own] = transparent
             px = downsample(crop, FACTOR[name], transparent)
+            # uho za poravnanje se mjeri prije čišćenja, da frameovi ostanu gdje su bili
+            ear = ear_right(px, transparent) if px.shape[1] >= 20 else 0
+            clean_edges(px, transparent, dark, {tongue_i, white_i}, outline)
+            catchlights(px, white[box] & own, FACTOR[name], white_i, dark)
             solid = px != transparent
             out = np.zeros((*px.shape, 4), dtype=np.uint8)
             out[solid, :3] = palette[px[solid]]
             out[solid, 3] = 255
-            parts.append((box, px, Image.fromarray(out, "RGBA")))
+            parts.append((box, px, ear, Image.fromarray(out, "RGBA")))
 
         dogs = []
-        for box, px, img in parts:
+        for box, px, ear, img in parts:
             if px.shape[1] < 20:  # hrpica, ne pas
                 continue
             # poravnanje: uho na ANCHOR_X, visina prema tlu izvorne slike
-            x = ANCHOR_X - ear_right(px, transparent)
+            x = ANCHOR_X - ear
             y = CANVAS_H - int(round((ground - box[0].start) / FACTOR[name]))
             canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H))
             canvas.paste(img, (x, y), img)
@@ -208,7 +278,7 @@ def main() -> None:
             print(name, len(dogs) - 1, "size", px.shape[1], "x", px.shape[0], "at", x, y)
 
         # hrpica: položaj na platnu psa koji je odmah desno od nje (taj je obavlja)
-        for box, px, img in parts:
+        for box, px, _, img in parts:
             if px.shape[1] >= 20:
                 continue
             owner = next(i for i, (b, _) in enumerate(dogs) if b[1].start > box[1].start)

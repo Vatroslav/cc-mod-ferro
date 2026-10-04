@@ -17,7 +17,7 @@ def main() -> None:
     zoom = int(sys.argv[2]) if len(sys.argv) > 2 else 6
     rows: dict[str, list[Image.Image]] = {}
     files = sorted(
-        (ROOT / "assets" / "px").glob("*-*.png"),
+        (f for f in (ROOT / "assets" / "px").glob("*-*.png") if f.stem.rsplit("-", 1)[1].isdigit()),
         key=lambda f: (f.stem.rsplit("-", 1)[0], int(f.stem.rsplit("-", 1)[1])),
     )
     for f in files:
