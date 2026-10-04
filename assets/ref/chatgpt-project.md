@@ -1,6 +1,6 @@
 # ChatGPT Project for new Ferro drawings
 
-The instructions below go into the Instructions field of the ChatGPT Project. They were written on 4.10.2026 from the prompts that produced `assets/src/run.png` and `meadow.png`, plus the rules `tools/build.py` needs.
+The instructions below go into the Instructions field of the ChatGPT Project. They were written on 4.10.2026 from the prompts that produced `assets/src/run.png` and `meadow.png`, plus the rules `tools/build.py` needs. Updated the same day after the new strips: the reference sheet has three close-ups, and ChatGPT drew `poop-walk.png` and `sit.png` bigger than the reference and the droppings far too big, so the size rules are stricter.
 
 - Attach `assets/ref/ferro-ref.png` to every message. The OpenAI documentation does not say that the image generator sees images from the project files.
 - For a new background, also attach `assets/src/meadow.png`, the style reference for backgrounds.
@@ -16,15 +16,15 @@ REFERENCE
 
 FERRO
 - Norwich Terrier: small compact sturdy body, short legs, wiry scruffy coat with a rough outline, small erect pointed ears, fox-like wedge-shaped muzzle, black nose, short upright tail.
-- Coat: pale wheaten tan body and legs, grey-black saddle on the back, warm orange-brown inside the ears. Dark eye with one white highlight pixel. Salmon pink tongue when the mouth is open.
+- Coat: pale wheaten tan body and legs, grey-black saddle on the back, warm orange-brown inside the ears. Dark eyes with one white highlight pixel in each visible eye. Salmon pink tongue when the mouth is open.
 - Side view facing right, unless the message says otherwise.
-- Size: about 40 pixels tall from ear tips to paws and about 55 pixels long when standing, the same as in the reference.
+- Size: about 40 pixels tall from ear tips to paws and about 55 pixels long when standing, the same as in the reference. Do not draw her bigger, longer or with a bigger head than in the reference, even when the image has room to spare; compare her head with the close-ups.
 
 SPRITE SHEETS
 - Frames in one horizontal row, evenly spaced, with clear background between them. Frames must never touch each other.
 - Same size and same ground baseline in every frame. Ferro looks identical in every frame; only the parts the action needs move.
 - 6 frames, unless the message says otherwise.
-- Props (ball, bone, toy) only when the message asks for them, in the same style and palette.
+- Props (ball, bone, toy) only when the message asks for them, in the same style and palette, and at their real size next to her: a ball or a dropping is smaller than her head.
 
 STYLE AND COLORS
 - Retro 16-bit game style, crisp hard pixel edges, no anti-aliasing, no blur, no gradients, dark 1-pixel outline.
