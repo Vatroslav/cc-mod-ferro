@@ -36,7 +36,7 @@ Every turn picks a meadow, what Ferro does 16 seconds into the run, and whether 
 
 **Art.** ChatGPT drew the frames (run, poop, sleep and sit as 6-frame strips, the hunched walk as a 4-frame strip with three droppings, all on a magenta background) and the three meadows. `tools/build.py` turns them into real pixel art: it cuts the frames, removes the magenta, snaps them to a true pixel grid, maps every pixel to a frozen 22-colour palette (`assets/palette.json`, plus reserved colours for the tongue and the eye highlight), cleans the outline, keeps one highlight in each eye and aligns the frames on the ground line and on the ear, or on the front paws where the head turns. ChatGPT drew some strips at a different scale than asked, so each strip has its own factor that gives Ferro the same head size everywhere. The sleeping breath and the blink while she sits are derived in code from one frame, so the pose never jumps. The orange ball is drawn in code. Each meadow is split into its three layers, and the clouds get their own small palette so their light-blue shading survives. Colours the meadow palette misses by far get extra slots, which keeps the brown trunks of the winter trees brown.
 
-<img src="assets/ref/ferro-ref.png" width="100%" alt="Reference sheet for ChatGPT: Ferro standing and running, the palette and the run, sleep and poop frames">
+<img src="assets/ref/ferro-ref.png" width="100%" alt="Reference sheet for ChatGPT: Ferro standing, running and facing the viewer, the palette and every frame of every animation">
 
 The reference sheet above goes into every ChatGPT request for new frames, so new drawings keep the same Ferro. The instructions and the prompts that produced each strip are in `assets/ref/chatgpt-project.md`.
 

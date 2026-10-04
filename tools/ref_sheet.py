@@ -1,5 +1,5 @@
-"""Ferro reference sheet for ChatGPT: two enlarged figures, the frozen palette and all frames
-from assets/px, on the magenta background that new drawings need as well. It is attached to
+"""Ferro reference sheet for ChatGPT: three enlarged figures, the frozen palette and all frames
+ChatGPT drew, from assets/px, on the magenta background that new drawings need as well. It is attached to
 every message in the ChatGPT Project, so new drawings keep the same style.
 
 Run (from the repo root): python tools/ref_sheet.py  ->  assets/ref/ferro-ref.png
@@ -17,10 +17,17 @@ OUT = ROOT / "assets" / "ref" / "ferro-ref.png"
 W, H = 1536, 1024  # 3:2, like the images ChatGPT returns
 MAGENTA = (255, 0, 255, 255)
 MARGIN = 40
-HERO_ZOOM, ROW_ZOOM = 9, 3
-HEROES = ["poop-0", "run-4"]  # standing still; running with the tongue out
-ROWS = {"run": [4, 3, 2, 5, 0], "sleep": range(6), "poop": range(6)}  # running in gallop order
-SWATCH, SWATCH_GAP, SWATCH_COLS = 64, 8, 4
+HERO_ZOOM, ROW_ZOOM = 6, 3
+HEROES = ["poop-0", "run-4", "sit-4"]  # standing still; running with the tongue out; facing the viewer
+# one row per animation, the frames ChatGPT drew (the breath and the blink are derived in code)
+ROWS = [
+    [f"run-{i}" for i in [4, 3, 2, 5, 0]],  # in gallop order
+    [f"sleep-{i}" for i in range(6)],
+    [f"poop-{i}" for i in range(6)],
+    [f"poop-walk-{i}" for i in range(4)] + [f"poop-walk-drop-{i}" for i in range(3)],
+    [f"sit-{i}" for i in range(6)],
+]
+SWATCH, SWATCH_GAP, SWATCH_COLS = 64, 8, 6
 
 
 def frame(name: str) -> Image.Image:
@@ -54,9 +61,9 @@ def main() -> None:
         sheet.alpha_composite(tile, (sx + col * (SWATCH + SWATCH_GAP), MARGIN + row * (SWATCH + SWATCH_GAP)))
 
     # bottom: all frames, one row per animation, aligned on the ground
-    y = MARGIN + top_h + MARGIN
-    for name, order in ROWS.items():
-        imgs = [big(frame(f"{name}-{i}"), ROW_ZOOM) for i in order]
+    y = MARGIN + top_h + MARGIN // 2
+    for names in ROWS:
+        imgs = [big(frame(n), ROW_ZOOM) for n in names]
         row_h = max(i.height for i in imgs)
         x = MARGIN
         for img in imgs:

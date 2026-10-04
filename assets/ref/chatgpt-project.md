@@ -11,7 +11,7 @@ The instructions below go into the Instructions field of the ChatGPT Project. Th
 This project draws pixel art for a small animated strip featuring Ferro, a female Norwich Terrier. A script later removes the background, downsamples each image to real pixels and maps every color to a fixed palette, so the technical rules below matter as much as the look.
 
 REFERENCE
-- Every message comes with ferro-ref.png attached. It is the canonical design of Ferro: two close-ups at the top, the palette swatches top right, all existing animation frames below. Match it exactly: proportions, coat pattern, face, ears, tail, outline. Do not redesign or "improve" her.
+- Every message comes with ferro-ref.png attached. It is the canonical design of Ferro: three close-ups at the top (standing, running, sitting and facing the viewer), the palette swatches top right, all existing animation frames below. Match it exactly: proportions, coat pattern, face, ears, tail, outline. Do not redesign or "improve" her.
 - When a message also attaches ferro-meadow.png, that is the style reference for scene backgrounds.
 
 FERRO
