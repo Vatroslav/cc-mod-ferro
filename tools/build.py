@@ -2,9 +2,12 @@
 smanji na zajedničku mrežu, svede na zajedničku paletu i spremi PNG-ove u assets/px.
 
 Pokretanje (iz korijena repoa): python tools/build.py
+Paleta psa je zamrznuta u assets/palette.json. Iznova se računa iz svih slika samo kad
+toga filea nema ili uz zastavicu: python tools/build.py --nova-paleta
 """
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -14,11 +17,12 @@ from scipy import ndimage
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "assets" / "src"
 OUT = ROOT / "assets" / "px"
+PALETTE_FILE = ROOT / "assets" / "palette.json"
 
 # Koliko izvornih piksela ide u jedan pravi piksel. Psi su u tri slike nacrtani u
 # različitoj veličini, pa faktor izjednačava visinu psa (trčanje 240, ostali ~220).
 FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55}
-PALETTE_SIZE = 22  # boje krzna i obruba; jezik i odsjaj u oku dobiju svoju boju povrh toga
+PALETTE_SIZE = 22  # samo za --nova-paleta; inače vrijedi broj boja krzna u palette.json
 
 
 def background_mask(rgb: np.ndarray) -> np.ndarray:
@@ -203,16 +207,10 @@ def downsample_rect(idx: np.ndarray, fx: float, fy: float, n: int) -> np.ndarray
     return out
 
 
-def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "meadow.json").write_text(json.dumps(meadow()))
-    sheets = {n: np.asarray(Image.open(SRC / f"{n}.png").convert("RGB")) for n in FACTOR}
+def new_palette(sheets: dict, bgs: dict) -> np.ndarray:
+    """Zajednička paleta iz svih piksela psa u svim slikama. Jezik i odsjaj imaju premalo
+    piksela da bi im median cut dao boju, pa dobiju svoju povrh PALETTE_SIZE."""
 
-    bgs = {n: background_mask(s) for n, s in sheets.items()}
-    bgs = {n: bg | fringe_mask(sheets[n], bg) for n, bg in bgs.items()}
-
-    # Zajednička paleta iz svih piksela psa u svim slikama. Jezik i odsjaj imaju premalo
-    # piksela da bi im median cut dao boju, pa dobiju svoju povrh PALETTE_SIZE.
     def pixels(mask_of) -> np.ndarray:
         return np.concatenate([s[mask_of(s) & ~bgs[n]] for n, s in sheets.items()])
 
@@ -223,13 +221,40 @@ def main() -> None:
         PALETTE_SIZE, method=Image.Quantize.MEDIANCUT, kmeans=20
     )
     palette = np.array(pal_img.getpalette()[: PALETTE_SIZE * 3]).reshape(-1, 3)
-    tongue_i, white_i, transparent = PALETTE_SIZE, PALETTE_SIZE + 1, PALETTE_SIZE + 2
-    palette = np.vstack(
+    return np.vstack(
         [palette, pixels(tongue_mask).mean(0).round(), pixels(white_mask).mean(0).round()]
     ).astype(int)
+
+
+def save_palette(palette: np.ndarray) -> None:
+    hexes = ["#%02x%02x%02x" % tuple(int(c) for c in p) for p in palette]
+    data = {"krzno": hexes[:-2], "jezik": hexes[-2], "odsjaj": hexes[-1]}
+    PALETTE_FILE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    print("nova paleta spremljena u", PALETTE_FILE.relative_to(ROOT))
+
+
+def load_palette() -> np.ndarray:
+    """Boje krzna i obruba, pa jezik, pa odsjaj u oku (redoslijed određuje indekse)."""
+    data = json.loads(PALETTE_FILE.read_text(encoding="utf-8"))
+    hexes = data["krzno"] + [data["jezik"], data["odsjaj"]]
+    return np.array([[int(h[i : i + 2], 16) for i in (1, 3, 5)] for h in hexes])
+
+
+def main() -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "meadow.json").write_text(json.dumps(meadow()))
+    sheets = {n: np.asarray(Image.open(SRC / f"{n}.png").convert("RGB")) for n in FACTOR}
+
+    bgs = {n: background_mask(s) for n, s in sheets.items()}
+    bgs = {n: bg | fringe_mask(sheets[n], bg) for n, bg in bgs.items()}
+
+    if "--nova-paleta" in sys.argv or not PALETTE_FILE.exists():
+        save_palette(new_palette(sheets, bgs))
+    palette = load_palette()
+    fur_n = len(palette) - 2
+    tongue_i, white_i, transparent = fur_n, fur_n + 1, fur_n + 2
     dark = {i for i, p in enumerate(palette) if p.sum() < 200}  # obrub, nos, oči
-    outline = int(palette[:PALETTE_SIZE].sum(1).argmin())
-    print("jezik", palette[tongue_i], "odsjaj", palette[white_i])
+    outline = int(palette[:fur_n].sum(1).argmin())
 
     for name, rgb in sheets.items():
         bg = bgs[name]
@@ -237,7 +262,7 @@ def main() -> None:
         # najbliža boja krzna za svaki izvorni piksel; jezik i odsjaj samo gdje su nacrtani
         best = np.zeros(len(flat), dtype=np.int16)
         best_d = np.full(len(flat), 1 << 30)
-        for i, p in enumerate(palette[:PALETTE_SIZE]):
+        for i, p in enumerate(palette[:fur_n]):
             d = ((flat - p) ** 2).sum(1)
             better = d < best_d
             best[better], best_d[better] = i, d[better]
