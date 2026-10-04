@@ -240,11 +240,14 @@ def load_palette() -> np.ndarray:
     return np.array([[int(h[i : i + 2], 16) for i in (1, 3, 5)] for h in hexes])
 
 
-# Disanje: iz zadnjeg framea spavanja nastanu frameovi u kojima su leđa podignuta za piksel.
-# Stupci su izmjereni na sleep-5 (4.10.2026.): leđa su luk od x 9 do 31, vrat do 35, glava
-# s ušima desno od toga i ostaje na mjestu. Nakon novog crteža spavanja provjeriti stupce.
+# Disanje: iz zadnjeg framea spavanja nastane frame u kojem su cijela leđa podignuta za piksel.
+# Stupci su izmjereni na sleep-5 (4.10.2026.): leđa od bubrega (x 17) do vrata (x 35), glava
+# s ušima desno od toga i ostaje na mjestu. Rubovi su birani tako da obris nigdje ne skoči
+# za dva piksela: lijevi rub unutar ravnog niza (x 16 i 17 su na istoj visini), desni uz
+# stupac koji je već viši (x 36). Dizanje samo dijela leđa izgleda kao kvrga koja raste.
+# Nakon novog crteža spavanja provjeriti stupce.
 BREATH_FROM = "sleep-5"
-BREATH_RAISE = {1: (16, 27), 2: (11, 31)}  # frame: stupci (od, do) koji se dignu za piksel
+BREATH_RAISE = {1: (17, 35)}  # frame: stupci (od, do) koji se dignu za piksel
 BREATH_DEPTH = 4  # koliko redova ispod obruba se pomakne gore; red ispod se ponovi (krzno)
 
 

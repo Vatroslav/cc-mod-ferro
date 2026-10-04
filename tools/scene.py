@@ -43,7 +43,7 @@ BACK_RATIO = 0.35
 # build.py iz sleep-5 (leđa podignuta za piksel, glava na mjestu); ChatGPT bi svaki frame
 # nacrtao iznova, pa bi Ferro podrhtavala umjesto da diše.
 SLEEP_INTRO = [(0, 0.6), (1, 0.6), (2, 1.6), (3, 1.0), (4, 1.0)]
-BREATH = [("sleep-5", 1.3), ("sleep-breath-1", 0.45), ("sleep-breath-2", 1.0), ("sleep-breath-1", 0.55)]
+BREATH = [("sleep-5", 1.8), ("sleep-breath-1", 1.2)]
 
 Z_GLYPH = ["####", "..#.", ".#..", "####"]
 

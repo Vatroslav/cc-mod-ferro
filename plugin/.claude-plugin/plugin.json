@@ -1,6 +1,6 @@
 {
   "name": "mod-ferro",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Ferro (Norwich terijer) trči po livadi u traci iznad prompta dok Claude dulje radi; povremeno stane obaviti nuždu, a nakon 3 min zaspi",
   "author": { "name": "Vatroslav Mileusnić" },
   "types": "./types/index.d.ts"
