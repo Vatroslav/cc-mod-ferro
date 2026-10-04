@@ -5,7 +5,7 @@
     {
       "name": "mod-ferro",
       "source": "./plugin",
-      "description": "Ferro trči po livadi iznad prompta dok Claude dulje radi"
+      "description": "Ferro runs across a pixel-art meadow above the prompt while Claude works on a long turn"
     }
   ]
 }

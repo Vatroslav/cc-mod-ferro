@@ -1,5 +1,5 @@
-# preview/*.svg se commita: generira ga tools/scene.py, a README ga prikazuje kao animaciju
+# preview/*.svg is committed: tools/scene.py generates it and the README shows it as animation
 __pycache__/
 
-# usporedbe prije/poslije, samo za pregled
+# before/after comparisons, only for viewing
 preview/*.png

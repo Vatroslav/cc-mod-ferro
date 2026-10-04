@@ -1,7 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-// Testovi bez prave sesije: sat je lažan i pomiče ga test, a ispod moda stoji "Claude Code"
-// testa koji traku crta kao <Text>engine</Text>, pa se vidi kad mod traku ne preuzme.
+// Tests without a real session: the clock is fake and the test moves it, and under the mod sits
+// the test's "Claude Code", which draws the band as <Text>engine</Text>, so it shows when the mod
+// does not take the band over.
 
 const PLUGIN = 'mod-ferro'
 
@@ -32,7 +33,7 @@ const complete = (turnId: string, agentId?: string) => ({
   answer: '', durationMs: 0, isAborted: false, turnId, reason: 'answer', ...(agentId ? { agentId } : {}),
 })
 
-test('kratki turn: prvih 20 s traka je Claude Codeova', async ($: any, on) => {
+test("short turn: for the first 20 s the band is Claude Code's", async ($: any, on) => {
   const clock = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(19_000)
@@ -41,16 +42,18 @@ test('kratki turn: prvih 20 s traka je Claude Codeova', async ($: any, on) => {
   expect(engine).toBeDefined()
 })
 
-test('nakon 20 s Ferro trči, nakon 3 min spava', async ($: any, on) => {
+test('after 20 s Ferro runs, after 3 min she sleeps, on the same background', async ($: any, on) => {
   const clock = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(20_000)
-  expect((await band($)).svg?.props.alt).toBe('Ferro trči po livadi')
+  const run = (await band($)).svg?.props.alt
+  expect(run).toMatch(/^Ferro running across the (autumn )?meadow$/)
   await clock.advance(160_000)
-  expect((await band($)).svg?.props.alt).toBe('Ferro spava na livadi')
+  const sleep = (await band($)).svg?.props.alt
+  expect(sleep).toBe(run.replace('running across', 'asleep on'))
 })
 
-test('kraj glavnog turna gasi traku, kraj subagenta ne', async ($: any, on) => {
+test('the end of the main turn closes the band, the end of a subagent does not', async ($: any, on) => {
   const clock = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(25_000)
@@ -58,12 +61,12 @@ test('kraj glavnog turna gasi traku, kraj subagenta ne', async ($: any, on) => {
   expect((await band($)).svg).toBeDefined()
   await $.turn.complete(complete('t1'))
   expect((await band($)).svg).toBeUndefined()
-  // timeri ugašenog turna više ne pale traku
+  // timers of a finished turn no longer open the band
   await clock.advance(200_000)
   expect((await band($)).svg).toBeUndefined()
 })
 
-test('kad Claude ne radi ili je u terminalu, traka nije Ferrina', async ($: any, on) => {
+test("when Claude is not working or in the terminal, the band is not Ferro's", async ($: any, on) => {
   const clock = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(25_000)
@@ -71,7 +74,7 @@ test('kad Claude ne radi ili je u terminalu, traka nije Ferrina', async ($: any,
   expect((await band($, 'terminal')).svg).toBeUndefined()
 })
 
-test('širina prati traku, najviše 1280 px', async ($: any, on) => {
+test('the width follows the band, at most 1280 px', async ($: any, on) => {
   const clock = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(25_000)
@@ -80,7 +83,7 @@ test('širina prati traku, najviše 1280 px', async ($: any, on) => {
   expect((await band($, 'desktop', props(10))).svg?.props.width).toBe(300)
 })
 
-test('scene svih pozadina stanu u limit Svg elementa', async () => {
+test('the scenes of every background fit the Svg element limit', async () => {
   const { SCENES } = await import('./scene')
   expect(SCENES.length).toBeGreaterThan(0)
   for (const s of SCENES) {

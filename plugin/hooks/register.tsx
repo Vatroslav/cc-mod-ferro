@@ -4,14 +4,14 @@ import type { Register, Timer } from 'claude-code'
 import type { FerroPhase } from '../types'
 import { SCENE_MAX_WIDTH, SCENES } from './scene'
 
-// Ferro izađe tek kad turn traje dulje od ovoga, da kratki odgovori ne trepću trakom.
+// Ferro comes out only when a turn lasts longer than this, so short answers do not flash the band.
 const RUN_AFTER_MS = 20_000
-// Kad Claude radi predugo, Ferro legne i zaspi.
+// When Claude works for too long, Ferro lies down and falls asleep.
 const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
 
 const phase = atom({ plugin: 'mod-ferro', key: 'phase' } as const, null as FerroPhase)
-// Pozadina ovog turna, indeks u SCENES: svaki turn nasumično (Vatra, 4.10.2026.).
+// This turn's background, an index into SCENES: picked at random on every turn.
 const scene = atom({ plugin: 'mod-ferro', key: 'scene' } as const, 0)
 
 export const register: Register = on => {
@@ -33,7 +33,7 @@ export const register: Register = on => {
   })
 
   on('turn.complete', async ($, e, next) => {
-    // Turnovi subagenata ne gase traku, samo kraj glavnog turna.
+    // Subagent turns do not close the band, only the end of the main turn does.
     if (e.agentId === undefined) {
       cancelTimers()
       await update($, phase, () => null)
@@ -42,7 +42,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    // Terminal nema Svg element.
+    // The terminal has no Svg element.
     if (e.surface === 'terminal' || e.props.hasSurvey || !e.props.isWorking) {
       return next(e)
     }
@@ -54,16 +54,16 @@ export const register: Register = on => {
     const { Box, Svg } = $.ui.resolve(e)
     const s = SCENES[await read($, scene)] ?? SCENES[0]
 
-    // Bez zadane širine okvir ostaje na 300 px. Desktop broji traku u stupcima od ~8 CSS
-    // piksela (izmjereno 4.10.2026.: 94 stupca, ~753 px). Scena se na užoj traci reže sa
-    // strane, a pikseli ostaju iste veličine.
+    // Without an explicit width the frame stays at 300 px. Desktop counts the band in columns
+    // of ~8 CSS pixels (measured 4.10.2026: 94 columns, ~753 px). On a narrower band the scene
+    // is cropped at the sides and the pixels keep their size.
     const width = Math.min(SCENE_MAX_WIDTH, Math.max(300, e.props.bodyColumns * PX_PER_COLUMN - 8))
 
     return (
       <Box>
         <Svg
           source={now === 'sleep' ? s.sleep : s.run}
-          alt={now === 'sleep' ? `Ferro spava na ${s.place}` : `Ferro trči po ${s.place}`}
+          alt={now === 'sleep' ? `Ferro asleep on ${s.place}` : `Ferro running across ${s.place}`}
           width={width}
           height={s.height}
           isInteractive

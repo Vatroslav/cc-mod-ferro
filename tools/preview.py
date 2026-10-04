@@ -1,6 +1,6 @@
-"""Uvećani pregled svih frameova iz assets/px, red po sceni, na zelenoj podlozi.
+"""Enlarged view of all frames in assets/px, one row per scene, on a green background.
 
-Pokretanje (iz korijena repoa): python tools/preview.py <izlazni.png> [uvećanje]
+Run (from the repo root): python tools/preview.py <output.png> [zoom]
 """
 
 import sys

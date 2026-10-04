@@ -1,9 +1,9 @@
-"""Pretvara ChatGPT slike (assets/src) u prave piksele: izreže frameove, makne magentu,
-smanji na zajedničku mrežu, svede na zajedničku paletu i spremi PNG-ove u assets/px.
+"""Turns the ChatGPT images (assets/src) into real pixels: cuts the frames, removes the magenta,
+downsamples to a shared grid, maps to a shared palette and saves the PNGs to assets/px.
 
-Pokretanje (iz korijena repoa): python tools/build.py
-Paleta psa je zamrznuta u assets/palette.json. Iznova se računa iz svih slika samo kad
-toga filea nema ili uz zastavicu: python tools/build.py --nova-paleta
+Run (from the repo root): python tools/build.py
+The dog palette is frozen in assets/palette.json. It is recomputed from all images only when
+that file is missing or with the flag: python tools/build.py --new-palette
 """
 
 import json
@@ -19,10 +19,10 @@ SRC = ROOT / "assets" / "src"
 OUT = ROOT / "assets" / "px"
 PALETTE_FILE = ROOT / "assets" / "palette.json"
 
-# Koliko izvornih piksela ide u jedan pravi piksel. Psi su u tri slike nacrtani u
-# različitoj veličini, pa faktor izjednačava visinu psa (trčanje 240, ostali ~220).
+# How many source pixels make one real pixel. The dog is drawn at a different size in each of
+# the three images, so the factor evens out the dog's height (run 240, the others ~220).
 FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55}
-PALETTE_SIZE = 22  # samo za --nova-paleta; inače vrijedi broj boja krzna u palette.json
+PALETTE_SIZE = 22  # only for --new-palette; otherwise the number of fur colours in palette.json
 
 
 def background_mask(rgb: np.ndarray) -> np.ndarray:
@@ -32,8 +32,9 @@ def background_mask(rgb: np.ndarray) -> np.ndarray:
 
 
 def fringe_mask(rgb: np.ndarray, bg: np.ndarray) -> np.ndarray:
-    """Rub psa pomiješan s magentom (ljubičasto uz pozadinu). Bez ovoga ulazi u paletu
-    kao bordo boja, pa se pojavi kao točke po obrubu i preotme jezik i uši."""
+    """The dog's edge blended with the magenta (purple next to the background). Without this
+    it enters the palette as a maroon colour, shows up as dots along the outline and takes
+    over the tongue and the ears."""
     rgb = rgb.astype(int)
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     near = ndimage.binary_dilation(bg, iterations=3)
@@ -47,12 +48,12 @@ def tongue_mask(rgb: np.ndarray) -> np.ndarray:
 
 
 def white_mask(rgb: np.ndarray) -> np.ndarray:
-    """Odsjaj u oku: ChatGPT ga crta kao točkicu manju od jednog pravog piksela."""
+    """Eye highlight: ChatGPT draws it as a dot smaller than one real pixel."""
     return rgb.min(2) > 235
 
 
 def components(rgb: np.ndarray, min_area: int):
-    """(okvir, maska) svakog lika, slijeva nadesno; maska pokriva samo njegove piksele."""
+    """(box, mask) of each figure, left to right; the mask covers only its own pixels."""
     fg = ndimage.binary_opening(~background_mask(rgb), iterations=1)
     lab, k = ndimage.label(fg)
     sizes = ndimage.sum(fg, lab, range(1, k + 1))
@@ -61,19 +62,19 @@ def components(rgb: np.ndarray, min_area: int):
         if s < min_area:
             continue
         own = lab[box] == i
-        # tanki rubovi koje je otvaranje odvojilo vraćaju se, tuđi likovi ne
+        # thin edges cut off by the opening come back, other figures do not
         own = ndimage.binary_dilation(own, iterations=3) & ((lab[box] == 0) | own)
         found.append((box, own))
     return sorted(found, key=lambda t: t[0][1].start)
 
 
-# Svi frameovi idu na isto platno: desni rub desnog uha na ANCHOR_X, tlo na dnu.
+# All frames go on the same canvas: the right edge of the right ear at ANCHOR_X, ground at the bottom.
 CANVAS_W, CANVAS_H = 76, 44
 ANCHOR_X = 54
 
 
 def ear_right(px: np.ndarray, transparent: int) -> int:
-    """Desni rub najviše četvrtine lika: to je desno uho (rep je lijevo)."""
+    """Right edge of the top quarter of the figure: that is the right ear (the tail is left)."""
     solid = px != transparent
     rows = np.where(solid.any(1))[0]
     top = solid[rows[0] : rows[0] + max(1, len(rows) // 4)]
@@ -81,7 +82,7 @@ def ear_right(px: np.ndarray, transparent: int) -> int:
 
 
 def downsample(idx: np.ndarray, factor: float, transparent: int) -> np.ndarray:
-    """Svaki pravi piksel dobije najčešću boju svog bloka; prozirno ako prevladava pozadina."""
+    """Each real pixel gets the most common colour of its block; transparent if background wins."""
     h, w = idx.shape
     th, tw = int(round(h / factor)), int(round(w / factor))
     out = np.full((th, tw), transparent, dtype=np.int16)
@@ -99,8 +100,8 @@ def downsample(idx: np.ndarray, factor: float, transparent: int) -> np.ndarray:
 
 
 def catchlights(px: np.ndarray, white: np.ndarray, factor: float, white_i: int, dark: set) -> None:
-    """Svaki odsjaj iz izvora postane jedan bijeli piksel, ako pada na tamno (oko).
-    Smanjivanje ga inače izgubi jer u svom bloku nikad nije najčešća boja."""
+    """Each highlight in the source becomes one white pixel, if it lands on a dark one (the eye).
+    Downsampling would lose it otherwise, because it is never the most common colour in its block."""
     lab, k = ndimage.label(white)
     for cy, cx in ndimage.center_of_mass(white, lab, range(1, k + 1)):
         y, x = int(cy / factor), int(cx / factor)
@@ -109,12 +110,12 @@ def catchlights(px: np.ndarray, white: np.ndarray, factor: float, white_i: int, 
 
 
 def clean_edges(px: np.ndarray, transparent: int, dark: set, protect: set, outline: int) -> None:
-    """Ispegla rub: makne zalutale piksele i bočne izbočine od jednog piksela (cik-cak po rubu),
-    pa zatvori obrub gdje ga je smanjivanje probilo (krzno uz pozadinu postane obrub).
-    Okomite izbočine ostaju jer su to vrhovi ušiju. Jezik i odsjaj se ne diraju."""
+    """Smooths the edge: removes stray pixels and one-pixel side bumps (zigzag along the edge),
+    then closes the outline where downsampling broke it (fur next to the background becomes
+    outline). Vertical bumps stay, because they are the ear tips. Tongue and highlight are kept."""
 
     def sides(solid: np.ndarray) -> list[np.ndarray]:
-        p = np.pad(solid, 1)  # izvan crteža je pozadina, pa i tabani dobiju obrub
+        p = np.pad(solid, 1)  # outside the drawing is background, so the paw pads get an outline too
         return [p[:-2, 1:-1], p[2:, 1:-1], p[1:-1, :-2], p[1:-1, 2:]]
 
     solid = px != transparent
@@ -127,17 +128,18 @@ def clean_edges(px: np.ndarray, transparent: int, dark: set, protect: set, outli
     px[solid & ~surrounded & ~np.isin(px, list(dark | protect))] = outline
 
 
-MEADOW_FX, MEADOW_FY = 10.0, 9.3  # livada nema kvadratne "piksele"
+MEADOW_FX, MEADOW_FY = 10.0, 9.3  # the meadow's "pixels" are not square
 MEADOW_COLORS = 48
-# Pozadine: assets/src/<ime>.png -> assets/px/<ime>-clouds/back/ground.png i <ime>.json.
-# Mod svaki turn nasumično bira jednu (Vatra, 4.10.2026.).
-BACKGROUNDS = ["meadow"]
-SKY_H = 20  # redova neba iznad brda u traci
-GROUND_H = 27  # redova trave ispod grmlja u traci
+CLOUD_COLORS = 2  # white and the light-blue shading, on top of the sky colour
+# Backgrounds: assets/src/<name>.png -> assets/px/<name>-clouds/back/ground.png and <name>.json.
+# The mod picks one at random on every turn.
+BACKGROUNDS = ["meadow", "autumn"]
+SKY_H = 20  # rows of sky above the hills in the band
+GROUND_H = 27  # rows of grass below the bushes in the band
 
 
 def meadow(name: str) -> dict:
-    """Pozadina u tri sloja: oblaci (presloženi u nisko nebo), brda s drvećem, trava."""
+    """Background in three layers: clouds (moved into a low sky), hills with trees, grass."""
     q = Image.open(SRC / f"{name}.png").convert("RGB").quantize(
         MEADOW_COLORS, method=Image.Quantize.MEDIANCUT
     )
@@ -152,9 +154,9 @@ def meadow(name: str) -> dict:
     not_sky = np.abs(rgb.astype(int) - sky).sum(2) > 30
     white = rgb.astype(int).min(2) > 190
 
-    # početak brda: prvi red u kojem je bar trećina nečeg što nije nebo ni oblak
+    # top of the hills: first row where at least a third is neither sky nor cloud
     hills_top = int(np.argmax((not_sky & ~white).mean(1) > 0.3)) - 3
-    # početak trave: red ispod grmlja s najviše svijetlozelene
+    # top of the grass: row below the bushes with the most light green
     g = rgb.astype(int)
     light_grass = (g[..., 1] > 170) & (g[..., 0] > 90) & (g[..., 2] < 90)
     grass_top = hills_top + 20 + int(np.argmax(light_grass[hills_top + 20 :].mean(1) > 0.6))
@@ -165,9 +167,26 @@ def meadow(name: str) -> dict:
         out[mask, 3] = 255
         return Image.fromarray(out, "RGBA")
 
-    # oblaci: svaki oblak zasebno, spušten u nisko nebo trake
-    cloud_mask = not_sky[:hills_top] & white[:hills_top]
-    cloud_mask = ndimage.binary_closing(cloud_mask, iterations=1) & not_sky[:hills_top]
+    # clouds get their own small palette from the sky above the hills: in the shared palette
+    # their light-blue shading merges into the sky or a grey-green and they turn into flat blobs
+    # (the sky is most of the pixels, so the cloud colours come from the cloud pixels alone)
+    top = np.asarray(Image.open(SRC / f"{name}.png").convert("RGB"))[: int(hills_top * MEADOW_FY)]
+    flat = top.reshape(-1, 3).astype(int)
+    vals, counts = np.unique(flat, axis=0, return_counts=True)
+    src_sky = vals[counts.argmax()]
+    cloudy = flat[np.abs(flat - src_sky).sum(1) > 30]
+    cloud_q = Image.fromarray(cloudy.reshape(1, -1, 3).astype(np.uint8)).quantize(
+        CLOUD_COLORS, method=Image.Quantize.MEDIANCUT
+    )
+    cloud_pal = np.vstack([src_sky, np.array(cloud_q.getpalette()[: CLOUD_COLORS * 3]).reshape(-1, 3)])
+    nearest = ((flat[:, None, :] - cloud_pal[None]) ** 2).sum(2).argmin(1)
+    cloud_px = downsample_rect(
+        nearest.reshape(top.shape[:2]).astype(np.int16), MEADOW_FX, MEADOW_FY, len(cloud_pal)
+    )[:hills_top]
+    sky_rgb = cloud_pal[cloud_px].astype(np.uint8)
+    cloud_mask = cloud_px > 0
+
+    # clouds: each cloud on its own, lowered into the band's low sky
     lab, k = ndimage.label(cloud_mask)
     clouds = np.zeros((SKY_H, w, 4), dtype=np.uint8)
     for i, box in enumerate(ndimage.find_objects(lab), start=1):
@@ -175,7 +194,7 @@ def meadow(name: str) -> dict:
         if ch > SKY_H - 2:
             continue
         y = min(max(1, box[0].start // 2), SKY_H - ch - 1)
-        part = rgb[box]
+        part = sky_rgb[box]
         m = lab[box] == i
         tgt = clouds[y : y + ch, box[1]]
         tgt[m, :3] = part[m]
@@ -211,15 +230,15 @@ def downsample_rect(idx: np.ndarray, fx: float, fy: float, n: int) -> np.ndarray
 
 
 def new_palette(sheets: dict, bgs: dict) -> np.ndarray:
-    """Zajednička paleta iz svih piksela psa u svim slikama. Jezik i odsjaj imaju premalo
-    piksela da bi im median cut dao boju, pa dobiju svoju povrh PALETTE_SIZE."""
+    """Shared palette from all dog pixels in all images. The tongue and the highlight have too
+    few pixels for median cut to give them a colour, so each gets its own on top of PALETTE_SIZE."""
 
     def pixels(mask_of) -> np.ndarray:
         return np.concatenate([s[mask_of(s) & ~bgs[n]] for n, s in sheets.items()])
 
     fg_pixels = pixels(lambda s: ~tongue_mask(s) & ~white_mask(s))
     sample = fg_pixels[:: max(1, len(fg_pixels) // 200_000)]
-    # k-means dorada: bez nje median cut izgubi neutralnu tamnosivu, pa sedlo dobije smeđe mrlje
+    # k-means refinement: without it median cut loses the neutral dark grey and the saddle gets brown blotches
     pal_img = Image.fromarray(sample.reshape(1, -1, 3).astype(np.uint8)).quantize(
         PALETTE_SIZE, method=Image.Quantize.MEDIANCUT, kmeans=20
     )
@@ -231,27 +250,28 @@ def new_palette(sheets: dict, bgs: dict) -> np.ndarray:
 
 def save_palette(palette: np.ndarray) -> None:
     hexes = ["#%02x%02x%02x" % tuple(int(c) for c in p) for p in palette]
-    data = {"krzno": hexes[:-2], "jezik": hexes[-2], "odsjaj": hexes[-1]}
+    data = {"fur": hexes[:-2], "tongue": hexes[-2], "highlight": hexes[-1]}
     PALETTE_FILE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print("nova paleta spremljena u", PALETTE_FILE.relative_to(ROOT))
+    print("new palette saved to", PALETTE_FILE.relative_to(ROOT))
 
 
 def load_palette() -> np.ndarray:
-    """Boje krzna i obruba, pa jezik, pa odsjaj u oku (redoslijed određuje indekse)."""
+    """Fur and outline colours, then the tongue, then the eye highlight (the order sets the indices)."""
     data = json.loads(PALETTE_FILE.read_text(encoding="utf-8"))
-    hexes = data["krzno"] + [data["jezik"], data["odsjaj"]]
+    hexes = data["fur"] + [data["tongue"], data["highlight"]]
     return np.array([[int(h[i : i + 2], 16) for i in (1, 3, 5)] for h in hexes])
 
 
-# Disanje: iz zadnjeg framea spavanja nastane frame u kojem su cijela leđa podignuta za piksel.
-# Stupci su izmjereni na sleep-5 (4.10.2026.): leđa od bubrega (x 17) do vrata (x 35), glava
-# s ušima desno od toga i ostaje na mjestu. Rubovi su birani tako da obris nigdje ne skoči
-# za dva piksela: lijevi rub unutar ravnog niza (x 16 i 17 su na istoj visini), desni uz
-# stupac koji je već viši (x 36). Dizanje samo dijela leđa izgleda kao kvrga koja raste.
-# Nakon novog crteža spavanja provjeriti stupce.
+# Breathing: from the last sleep frame comes a frame with the whole back raised by one pixel.
+# Columns measured on sleep-5 (4.10.2026): the back runs from the loin (x 17) to the neck
+# (x 35); the head with the ears is to the right of that and stays in place. The ends are
+# chosen so the outline never jumps by two pixels: the left end sits inside a flat run (x 16
+# and 17 are at the same height), the right end next to a column that is already higher
+# (x 36). Raising only part of the back looks like a growing lump.
+# Check the columns after a new sleep drawing.
 BREATH_FROM = "sleep-5"
-BREATH_RAISE = {1: (17, 35)}  # frame: stupci (od, do) koji se dignu za piksel
-BREATH_DEPTH = 4  # koliko redova ispod obruba se pomakne gore; red ispod se ponovi (krzno)
+BREATH_RAISE = {1: (17, 35)}  # frame: columns (from, to) raised by one pixel
+BREATH_DEPTH = 4  # how many rows below the outline move up; the row below is repeated (fur)
 
 
 def breathing(palette: np.ndarray, dark: set, outline: int) -> None:
@@ -262,7 +282,7 @@ def breathing(palette: np.ndarray, dark: set, outline: int) -> None:
         for x in range(x0, x1 + 1):
             top = int(np.argmax(a[:, x, 3] > 0))
             a[top - 1 : top + BREATH_DEPTH, x] = src[top : top + BREATH_DEPTH + 1, x]
-        # gdje je stepenica viša od piksela, krzno je ostalo uz pozadinu: zatvoriti obrub
+        # where a step is higher than one pixel, fur is left next to the background: close the outline
         solid = a[..., 3] > 0
         p = np.pad(solid, 1)
         exposed = solid & ~(p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:])
@@ -270,7 +290,7 @@ def breathing(palette: np.ndarray, dark: set, outline: int) -> None:
             if tuple(int(c) for c in a[y, x, :3]) not in dark_rgb:
                 a[y, x, :3] = palette[outline]
         Image.fromarray(a, "RGBA").save(OUT / f"sleep-breath-{k}.png")
-        print("disanje", k, "stupci", x0, "-", x1)
+        print("breath", k, "columns", x0, "-", x1)
 
 
 def main() -> None:
@@ -282,18 +302,18 @@ def main() -> None:
     bgs = {n: background_mask(s) for n, s in sheets.items()}
     bgs = {n: bg | fringe_mask(sheets[n], bg) for n, bg in bgs.items()}
 
-    if "--nova-paleta" in sys.argv or not PALETTE_FILE.exists():
+    if "--new-palette" in sys.argv or not PALETTE_FILE.exists():
         save_palette(new_palette(sheets, bgs))
     palette = load_palette()
     fur_n = len(palette) - 2
     tongue_i, white_i, transparent = fur_n, fur_n + 1, fur_n + 2
-    dark = {i for i, p in enumerate(palette) if p.sum() < 200}  # obrub, nos, oči
+    dark = {i for i, p in enumerate(palette) if p.sum() < 200}  # outline, nose, eyes
     outline = int(palette[:fur_n].sum(1).argmin())
 
     for name, rgb in sheets.items():
         bg = bgs[name]
         flat = rgb.reshape(-1, 3).astype(int)
-        # najbliža boja krzna za svaki izvorni piksel; jezik i odsjaj samo gdje su nacrtani
+        # nearest fur colour for each source pixel; tongue and highlight only where they are drawn
         best = np.zeros(len(flat), dtype=np.int16)
         best_d = np.full(len(flat), 1 << 30)
         for i, p in enumerate(palette[:fur_n]):
@@ -307,13 +327,13 @@ def main() -> None:
         idx[bg] = transparent
 
         found = components(rgb, 400)
-        ground = max(box[0].stop for box, _ in found)  # tlo slike: najniži lik
+        ground = max(box[0].stop for box, _ in found)  # the image's ground: the lowest figure
         parts = []
         for box, own in found:
             crop = idx[box].copy()
             crop[~own] = transparent
             px = downsample(crop, FACTOR[name], transparent)
-            # uho za poravnanje se mjeri prije čišćenja, da frameovi ostanu gdje su bili
+            # the ear used for alignment is measured before cleaning, so frames stay where they were
             ear = ear_right(px, transparent) if px.shape[1] >= 20 else 0
             clean_edges(px, transparent, dark, {tongue_i, white_i}, outline)
             catchlights(px, white[box] & own, FACTOR[name], white_i, dark)
@@ -325,9 +345,9 @@ def main() -> None:
 
         dogs = []
         for box, px, ear, img in parts:
-            if px.shape[1] < 20:  # hrpica, ne pas
+            if px.shape[1] < 20:  # the pile, not the dog
                 continue
-            # poravnanje: uho na ANCHOR_X, visina prema tlu izvorne slike
+            # alignment: ear at ANCHOR_X, height from the source image's ground
             x = ANCHOR_X - ear
             y = CANVAS_H - int(round((ground - box[0].start) / FACTOR[name]))
             canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H))
@@ -336,7 +356,7 @@ def main() -> None:
             dogs.append((box, x))
             print(name, len(dogs) - 1, "size", px.shape[1], "x", px.shape[0], "at", x, y)
 
-        # hrpica: položaj na platnu psa koji je odmah desno od nje (taj je obavlja)
+        # pile: position on the canvas of the dog right of it (the one making it)
         for box, px, _, img in parts:
             if px.shape[1] >= 20:
                 continue

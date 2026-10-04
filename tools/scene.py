@@ -1,13 +1,14 @@
-"""Slaže dvije SVG scene iz assets/px i zapisuje ih u hooks/scene.ts (i preview/ za pregled):
+"""Builds two SVG scenes per background from assets/px and writes them to hooks/scene.ts
+(and to preview/ for viewing):
 
-- RUN: Ferro trči po livadi (tri sloja klize različitim brzinama), povremeno stane obaviti
-  nuždu, hrpica ostane na livadi i otklizi ulijevo.
-- SLEEP: Ferro legne i zaspi, oblaci i dalje plove, iznad glave joj izlaze z-ovi.
+- RUN: Ferro runs across the meadow (three layers scroll at different speeds), stops now and
+  then to poop, and the pile stays on the meadow and scrolls away to the left.
+- SLEEP: Ferro lies down and falls asleep, the clouds keep drifting, z's rise above her head.
 
-Traka u Desktopu ne prikazuje <image> s PNG-om (data URI), a <use> prikazuje. Zato je svaki
-crtež pretvoren u vektorske crte (jedan <path> po boji) unutar <defs>, a scena ga koristi
-preko <use>. Sve se animira SMIL-om.
-Pokretanje (iz korijena repoa, nakon tools/build.py): python tools/scene.py
+The Desktop band does not render <image> with a PNG (data URI), but it does render <use>. So
+every drawing is converted to vector strokes (one <path> per colour) inside <defs>, and the
+scene places it with <use>. Everything is animated with SMIL.
+Run (from the repo root, after tools/build.py): python tools/scene.py
 """
 
 import json
@@ -20,34 +21,35 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 PX = ROOT / "assets" / "px"
 
-SCALE = 2  # CSS piksela po pikselu
-VW = 640  # širina viewBoxa; traka uža od VW*SCALE reže rubove, ne smanjuje piksele
-RUN_SPEED = 80  # px/s tla dok trči
-CLOUD_SPEED = 4  # px/s, oblaci plove i dok spava
-RUN_FRAME_S = 0.13  # brže od ovoga noge izgledaju kao da se trzaju
-# ChatGPT je frameove poslagao bez reda faza galopa. Pravi redoslijed: ispružena u zraku (4),
-# doskok prednjima (3), stražnje idu naprijed (2), skupljena (5), odraz stražnjima (0).
-# Frame 1 je drugi "ispružen", višak.
+SCALE = 2  # CSS pixels per pixel
+VW = 640  # viewBox width; a band narrower than VW*SCALE crops the edges, it does not shrink the pixels
+RUN_SPEED = 80  # px/s of the ground while she runs
+CLOUD_SPEED = 4  # px/s, the clouds drift even while she sleeps
+RUN_FRAME_S = 0.13  # any faster and the legs look like they twitch
+# ChatGPT laid the frames out without the order of the gallop phases. The real order: stretched
+# in the air (4), landing on the front legs (3), hind legs swinging forward (2), gathered (5),
+# push-off with the hind legs (0). Frame 1 is a second "stretched" frame, left out.
 RUN_ORDER = [4, 3, 2, 5, 0]
 
-# Raspored jedne petlje scene RUN: trčanje, nužda, trčanje. Trajanje drugog trčanja je
-# podešeno da tlo u petlji prijeđe točno 20 širina livade, a brda (0,35 brzine) točno 7,
-# pa se petlja nastavlja bez skoka.
+# Schedule of one RUN loop: run, poop, run. The second run lasts exactly long enough for the
+# ground to travel 20 meadow widths in one loop and the hills (at 0.35 of the speed) exactly 7,
+# so the loop continues without a jump.
 RUN_BEFORE = 16.0
-POOP = [(0, 0.5), (1, 0.35), (2, 0.35), (3, 1.3), (4, 1.6), (5, 0.45)]  # (frame, sekunde)
-WALK_AWAY_PX = 13  # koliko se odmakne od hrpice u zadnjem frameu
+POOP = [(0, 0.5), (1, 0.35), (2, 0.35), (3, 1.3), (4, 1.6), (5, 0.45)]  # (frame, seconds)
+WALK_AWAY_PX = 13  # how far she moves away from the pile in the last frame
 GROUND_TILES = 20
 BACK_RATIO = 0.35
 
-# Spavanje: uvod (frame, sekunde), pa disanje na zadnjem frameu. Frameove disanja izvodi
-# build.py iz sleep-5 (leđa podignuta za piksel, glava na mjestu); ChatGPT bi svaki frame
-# nacrtao iznova, pa bi Ferro podrhtavala umjesto da diše.
+# Sleep: intro (frame, seconds), then breathing on the last frame. build.py derives the
+# breathing frame from sleep-5 (back raised by one pixel, head in place); ChatGPT would redraw
+# every frame from scratch, so Ferro would tremble instead of breathe.
 SLEEP_INTRO = [(0, 0.6), (1, 0.6), (2, 1.6), (3, 1.0), (4, 1.0)]
 BREATH = [("sleep-5", 1.8), ("sleep-breath-1", 1.2)]
 
-# Pozadine iz build.py (ime: gdje je Ferro, za alt tekst). Mod svaki turn nasumično bira
-# jednu. Pregled prve ide u preview/run.svg i sleep.svg, ostalih u preview/<ime>-run.svg.
-BACKGROUNDS = {"meadow": "livadi"}
+# Backgrounds from build.py (name: where Ferro is, for the alt text). The mod picks one at
+# random on every turn. The first one is previewed in preview/run.svg and sleep.svg, the
+# others in preview/<name>-run.svg and <name>-sleep.svg.
+BACKGROUNDS = {"meadow": "the meadow", "autumn": "the autumn meadow"}
 
 Z_GLYPH = ["####", "..#.", ".#..", "####"]
 
@@ -62,7 +64,7 @@ def size(name: str) -> tuple[int, int]:
 
 
 def sprite_def(id_: str, name: str) -> str:
-    """PNG u <g> s jednom crtom po boji: svaki vodoravni niz piksela je potez debljine 1."""
+    """PNG as a <g> with one path per colour: every horizontal run of pixels is a stroke of width 1."""
     a = np.asarray(Image.open(PX / name).convert("RGBA"))
     by_color: dict[str, list[str]] = {}
     for y in range(a.shape[0]):
@@ -89,7 +91,7 @@ def sprite_def(id_: str, name: str) -> str:
 
 
 def linear(points: list[tuple[float, float]], period: float, y: int = 0, repeat: bool = True) -> str:
-    """Pomak po x kroz ključne točke (sekunda, x), linearno između njih."""
+    """Movement along x through key points (second, x), linear between them."""
     vals = ";".join(f"{fmt(x)} {y}" for _, x in points)
     keys = ";".join(fmt(t / period) for t, _ in points)
     rep = 'repeatCount="indefinite"' if repeat else 'fill="freeze"'
@@ -100,7 +102,7 @@ def linear(points: list[tuple[float, float]], period: float, y: int = 0, repeat:
 
 
 def discrete(attr: str, values: list[str], times: list[float], period: float) -> str:
-    """Diskretna animacija preko cijele petlje; times su početci vrijednosti u sekundama."""
+    """Discrete animation over the whole loop; times are the start of each value in seconds."""
     keys = ";".join(fmt(t / period) for t in times)
     return (
         f'<animate attributeName="{attr}" values="{";".join(values)}" keyTimes="{keys}" '
@@ -109,7 +111,7 @@ def discrete(attr: str, values: list[str], times: list[float], period: float) ->
 
 
 def tiles(tile: str, y: int, width: int, travel: float) -> str:
-    """Dovoljno kopija sloja da pokriju viewBox i cijeli put koji sloj prijeđe u petlji."""
+    """Enough copies of a layer to cover the viewBox and the whole distance it travels in a loop."""
     copies = math.ceil((VW + travel) / width) + 1
     return "".join(f'<use href="#{tile}" x="{k * width}" y="{y}"/>' for k in range(copies))
 
@@ -151,7 +153,7 @@ def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
     period = poop_end + run_after
     d1 = RUN_BEFORE * RUN_SPEED
 
-    # put tla kroz petlju: trči, stoji, odmakne se, trči do kraja
+    # path of the ground through the loop: runs, stands, steps away, runs to the end
     ground_pts = [(0, 0), (poop_start, -d1), (walk_from, -d1), (poop_end, -d1 - WALK_AWAY_PX),
                   (period, -ground_total)]
     back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
@@ -170,7 +172,7 @@ def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
         + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
     )
 
-    # trčanje: vlastiti brzi ciklus, cijela grupa skrivena dok obavlja nuždu
+    # running: its own fast cycle, the whole group hidden while she poops
     cycle = RUN_FRAME_S * len(RUN_ORDER)
     run_imgs = ""
     for slot, frame in enumerate(RUN_ORDER):
@@ -196,7 +198,7 @@ def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
         )
         t += s
 
-    # hrpica ostaje na mjestu na livadi, pa klizi zajedno s tlom
+    # the pile stays in place on the meadow, so it scrolls with the ground
     pile = json.loads((PX / "poop-pile.json").read_text())
     pile_pts = [(0, 0), (walk_from, 0), (poop_end, -WALK_AWAY_PX),
                 (period, -WALK_AWAY_PX - run_after * RUN_SPEED)]
@@ -231,7 +233,7 @@ def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
         )
         t += s
     intro = t
-    # disanje: petlja frameova iz BREATH, isti frame može doći više puta
+    # breathing: a loop of the frames in BREATH, the same frame may come more than once
     period = sum(s for _, s in BREATH)
     starts = [sum(s for _, s in BREATH[:j]) for j in range(len(BREATH))]
     keys = ";".join(fmt(st / period) for st in starts)
@@ -243,7 +245,7 @@ def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
             f'calcMode="discrete" repeatCount="indefinite"/></use>'
         )
 
-    # z-ovi: izlaze iznad glave, dižu se i blijede, jedan za drugim
+    # z's: appear above the head, rise and fade, one after another
     zpath = "".join(
         f"M{x} {y}h1v1h-1z"
         for y, row in enumerate(Z_GLYPH)
@@ -290,10 +292,10 @@ def main() -> None:
         prefix = "" if k == 0 else f"{name}-"
         (preview / f"{prefix}run.svg").write_text(run, encoding="utf-8")
         (preview / f"{prefix}sleep.svg").write_text(sleep, encoding="utf-8")
-        print(name, "RUN", len(run), "znakova; SLEEP", len(sleep), "znakova; limit 131072")
+        print(name, "RUN", len(run), "chars; SLEEP", len(sleep), "chars; limit 131072")
 
     ts = (
-        "// Generirano iz tools/scene.py - ne uređivati ručno.\n"
+        "// Generated by tools/scene.py - do not edit by hand.\n"
         f"export const SCENE_MAX_WIDTH = {VW * SCALE}\n"
         f"export const SCENES = {json.dumps(scenes)}\n"
     )

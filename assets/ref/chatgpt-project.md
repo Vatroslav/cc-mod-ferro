@@ -1,10 +1,9 @@
-# ChatGPT Project za nove crteže Ferro
+# ChatGPT Project for new Ferro drawings
 
-Upute ispod idu u polje Instructions ChatGPT Projecta. Napisane su 4.10.2026. na temelju promptova kojima su nastali `assets/src/run.png` i `meadow.png`, uz pravila koja traži `tools/build.py`.
+The instructions below go into the Instructions field of the ChatGPT Project. They were written on 4.10.2026 from the prompts that produced `assets/src/run.png` and `meadow.png`, plus the rules `tools/build.py` needs.
 
-- Uz svaku poruku priložiti `assets/ref/ferro-ref.png`. OpenAI dokumentacija ne kaže da generator slika vidi slike iz project fileova.
-- Za novu pozadinu priložiti i `assets/src/meadow.png`, jer je to referenca stila za pozadine.
-- Kopije obje slike su 4.10.2026. stavljene u Downloads, kao `ferro-ref.png` i `ferro-meadow.png`.
+- Attach `assets/ref/ferro-ref.png` to every message. The OpenAI documentation does not say that the image generator sees images from the project files.
+- For a new background, also attach `assets/src/meadow.png`, the style reference for backgrounds.
 
 ## Instructions
 
@@ -40,8 +39,16 @@ OUTPUT
 - One image per message. No text, labels, frame numbers or watermarks inside the image.
 ```
 
-## Poruka za novu animaciju (obrazac)
+## Message for a new animation (template)
 
 ```text
 Sprite sheet: Ferro <what she does>, 6 frames: <frame 1>, <frame 2>, <frame 3>, <frame 4>, <frame 5>, <frame 6>.
+```
+
+## Message for a new background (the one that produced `autumn.png`)
+
+Attach `meadow.png` and `ferro-ref.png`. Keep the composition of the meadow, because `build.py` splits the image into sky, hills and grass by rows. Keep a blue sky with white clouds (the cloud layer is whatever differs from the sky) and keep the grass light enough that a tan dog stands out against it.
+
+```text
+Scene background: an autumn version of the attached meadow (ferro-meadow.png). Keep the same composition and layout: a flat solid sky color at the top with a few small white pixel clouds, rolling forested hills in the middle, a row of round trees and bushes along the back of the meadow, and a flat grass strip in the bottom quarter. Autumn look: trees and hills in warm orange, red, yellow and brown, a few trees with sparse leaves, a slightly softer blue sky. The grass stays mostly green, faded and a little yellowish, with only a few scattered fallen leaves, so a tan and orange dog (see ferro-ref.png) stands out clearly against it. Left and right edges must match seamlessly. Same pixel size and style as the reference, landscape 3:2.
 ```

@@ -1,8 +1,8 @@
-"""Referentni sheet Ferro za ChatGPT: dva uvećana lika, zamrznuta paleta i svi frameovi
-iz assets/px, na magenta podlozi kakvu traže i novi crteži. Prilaže se uz svaku poruku
-u ChatGPT Projectu, da novi crteži ostanu u istom stilu.
+"""Ferro reference sheet for ChatGPT: two enlarged figures, the frozen palette and all frames
+from assets/px, on the magenta background that new drawings need as well. It is attached to
+every message in the ChatGPT Project, so new drawings keep the same style.
 
-Pokretanje (iz korijena repoa): python tools/ref_sheet.py  ->  assets/ref/ferro-ref.png
+Run (from the repo root): python tools/ref_sheet.py  ->  assets/ref/ferro-ref.png
 """
 
 import json
@@ -14,12 +14,12 @@ ROOT = Path(__file__).resolve().parent.parent
 PX = ROOT / "assets" / "px"
 OUT = ROOT / "assets" / "ref" / "ferro-ref.png"
 
-W, H = 1536, 1024  # 3:2, kao slike koje ChatGPT vraća
+W, H = 1536, 1024  # 3:2, like the images ChatGPT returns
 MAGENTA = (255, 0, 255, 255)
 MARGIN = 40
 HERO_ZOOM, ROW_ZOOM = 9, 3
-HEROES = ["poop-0", "run-4"]  # stoji mirno; trči s isplaženim jezikom
-ROWS = {"run": [4, 3, 2, 5, 0], "sleep": range(6), "poop": range(6)}  # trčanje redom galopa
+HEROES = ["poop-0", "run-4"]  # standing still; running with the tongue out
+ROWS = {"run": [4, 3, 2, 5, 0], "sleep": range(6), "poop": range(6)}  # running in gallop order
 SWATCH, SWATCH_GAP, SWATCH_COLS = 64, 8, 4
 
 
@@ -35,7 +35,7 @@ def big(img: Image.Image, zoom: int) -> Image.Image:
 def main() -> None:
     sheet = Image.new("RGBA", (W, H), MAGENTA)
 
-    # gore: uvećani likovi na zajedničkom tlu
+    # top: enlarged figures on a shared ground line
     heroes = [big(frame(n), HERO_ZOOM) for n in HEROES]
     top_h = max(h.height for h in heroes)
     x = MARGIN
@@ -43,9 +43,9 @@ def main() -> None:
         sheet.alpha_composite(h, (x, MARGIN + top_h - h.height))
         x += h.width + MARGIN
 
-    # gore desno: paleta (krzno i obrub, pa jezik i odsjaj)
+    # top right: the palette (fur and outline, then tongue and highlight)
     pal = json.loads((ROOT / "assets" / "palette.json").read_text(encoding="utf-8"))
-    colors = pal["krzno"] + [pal["jezik"], pal["odsjaj"]]
+    colors = pal["fur"] + [pal["tongue"], pal["highlight"]]
     sx = W - MARGIN - SWATCH_COLS * (SWATCH + SWATCH_GAP) + SWATCH_GAP
     for i, c in enumerate(colors):
         col, row = i % SWATCH_COLS, i // SWATCH_COLS
@@ -53,7 +53,7 @@ def main() -> None:
         tile = Image.new("RGBA", (SWATCH, SWATCH), (*rgb, 255))
         sheet.alpha_composite(tile, (sx + col * (SWATCH + SWATCH_GAP), MARGIN + row * (SWATCH + SWATCH_GAP)))
 
-    # dolje: svi frameovi, red po animaciji, poravnati po tlu
+    # bottom: all frames, one row per animation, aligned on the ground
     y = MARGIN + top_h + MARGIN
     for name, order in ROWS.items():
         imgs = [big(frame(f"{name}-{i}"), ROW_ZOOM) for i in order]
@@ -65,10 +65,10 @@ def main() -> None:
         y += row_h + MARGIN // 2
 
     if y > H:
-        raise SystemExit(f"sheet je previsok: {y} > {H}")
+        raise SystemExit(f"sheet is too tall: {y} > {H}")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     sheet.convert("RGB").save(OUT)
-    print(OUT.relative_to(ROOT), sheet.size, "zadnji red završava na", y)
+    print(OUT.relative_to(ROOT), sheet.size, "last row ends at", y)
 
 
 if __name__ == "__main__":

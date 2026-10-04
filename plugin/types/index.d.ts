@@ -1,4 +1,4 @@
-// Što Ferro radi u traci: ništa (traka se ne prikazuje), trči ili spava.
+// What Ferro does in the band: nothing (the band is not shown), runs or sleeps.
 export type FerroPhase = 'run' | 'sleep' | null
 
 declare module 'claude-code' {

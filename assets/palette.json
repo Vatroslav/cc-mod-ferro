@@ -1,5 +1,5 @@
 {
-  "krzno": [
+  "fur": [
     "#fceab7",
     "#f9dea5",
     "#f5d599",
@@ -23,6 +23,6 @@
     "#1f0e15",
     "#060304"
   ],
-  "jezik": "#e7766f",
-  "odsjaj": "#fcfcf6"
+  "tongue": "#e7766f",
+  "highlight": "#fcfcf6"
 }
