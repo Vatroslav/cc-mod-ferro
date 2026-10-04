@@ -9,10 +9,10 @@ const RUN_AFTER_MS = 20_000
 // When Claude works for too long, Ferro lies down and falls asleep.
 const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
-// Each turn she either sits and looks at the viewer or poops; sitting comes more often (Vatra).
+// Each turn she sits and looks at the viewer, poops while walking, or poops in one spot
+// (Vatra: 60-30-10). The real Ferro rarely stops to poop in one spot.
 const SIT_SHARE = 0.6
-// The real Ferro poops while walking and only rarely stops to poop in one spot.
-const STILL_POOP_SHARE = 0.2
+const WALK_POOP_SHARE = 0.3
 // In about a third of the turns she chases an orange ball.
 const BALL_SHARE = 1 / 3
 
@@ -35,9 +35,10 @@ export const register: Register = on => {
     cancelTimers()
     await update($, phase, () => null)
     await update($, scene, () => Math.floor(Math.random() * SCENES.length))
-    await update($, variant, () =>
-      Math.random() < SIT_SHARE ? 'runSit' : Math.random() < STILL_POOP_SHARE ? 'runStill' : 'run',
-    )
+    await update($, variant, () => {
+      const r = Math.random()
+      return r < SIT_SHARE ? 'runSit' : r < SIT_SHARE + WALK_POOP_SHARE ? 'run' : 'runStill'
+    })
     await update($, ball, () => Math.random() < BALL_SHARE)
     timers = [
       $.clock.after(RUN_AFTER_MS, () => void update($, phase, () => 'run')),
