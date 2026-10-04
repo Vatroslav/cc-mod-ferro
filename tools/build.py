@@ -320,6 +320,31 @@ BREATH_FROM = "sleep-5"
 BREATH_RAISE = {1: (17, 35)}  # frame: columns (from, to) raised by one pixel
 BREATH_DEPTH = 4  # how many rows below the outline move up; the row below is repeated (fur)
 
+# The orange ball she chases is drawn here, not by ChatGPT: a pixel circle with Ferro's outline,
+# lit from the top left. 9 pixels is about a dog ball next to a Norwich Terrier.
+BALL_D = 9
+BALL_COLORS = {"light": "#f8b25a", "base": "#ee8a2a", "shade": "#c4601e", "highlight": "#fff3dc"}
+
+
+def ball(outline_rgb: np.ndarray) -> None:
+    r = BALL_D / 2
+    yy, xx = np.mgrid[0:BALL_D, 0:BALL_D] + 0.5
+    inside = (xx - r) ** 2 + (yy - r) ** 2 <= r * r
+    p = np.pad(inside, 1)
+    edge = inside & ~(p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:])
+    # light from the top left: how far each pixel lies along that direction, -1 to 1
+    lit = ((r - xx) + (r - yy)) / (r * 1.414)
+    rgb = lambda h: [int(h[i : i + 2], 16) for i in (1, 3, 5)]  # noqa: E731
+    out = np.zeros((BALL_D, BALL_D, 4), dtype=np.uint8)
+    out[inside, 3] = 255
+    out[inside & (lit > 0.35)] = rgb(BALL_COLORS["light"]) + [255]
+    out[inside & (lit <= 0.35) & (lit > -0.35)] = rgb(BALL_COLORS["base"]) + [255]
+    out[inside & (lit <= -0.35)] = rgb(BALL_COLORS["shade"]) + [255]
+    out[2, 2] = rgb(BALL_COLORS["highlight"]) + [255]
+    out[edge, :3] = outline_rgb
+    Image.fromarray(out, "RGBA").save(OUT / "ball.png")
+    print("ball", BALL_D, "x", BALL_D)
+
 
 def breathing(palette: np.ndarray, dark: set, outline: int) -> None:
     src = np.asarray(Image.open(OUT / f"{BREATH_FROM}.png").convert("RGBA"))
@@ -432,6 +457,7 @@ def main() -> None:
             break
 
     breathing(palette, dark, outline)
+    ball(palette[outline])
 
 
 if __name__ == "__main__":

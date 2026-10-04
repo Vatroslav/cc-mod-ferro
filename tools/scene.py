@@ -144,7 +144,7 @@ def svg(body: str, defs: list[str], meadow: dict, height: int) -> str:
     )
 
 
-def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
+def run_scene(meadow: dict, dog_x: int, dog_y: int, ball: bool = False) -> str:
     mw = meadow["width"]
     poop_start = RUN_BEFORE
     poop_len = sum(s for _, s in POOP)
@@ -213,12 +213,99 @@ def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
     )
 
     height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
+    ball_el = ""
+    if ball:
+        defs.append(sprite_def("ball", "ball.png"))
+        ball_el = ball_layer(ground_pts, poop_start, poop_end, period, dog_x, dog_y)
     body = (
         layers
         + pile_el
+        + ball_el
         + f'<g transform="translate({dog_x} {dog_y})">{run_group}{poop_imgs}</g>'
     )
     return svg(body, defs, meadow, height)
+
+
+# The orange ball she chases: it bounces ahead of her while she runs, rolls on and comes to
+# rest on the grass when she stops to poop, and pops up again when she reaches it.
+BALL_BOUNCE_S = 0.55  # one bounce, roughly
+BALL_BOUNCE_H = 14  # px
+BALL_GAP = (8, 52)  # px between her nose and the ball while she chases it, nearest and farthest
+BALL_GAP_S = 3.7  # seconds of one swing from near to far and back
+BALL_ROLL_MIN = 40  # px the ball rolls on at least when she stops
+BALL_ROLL_S = 1.2
+NOSE_X = 58  # x of her nose on the run canvas
+
+
+def ball_layer(ground_pts: list, stop: float, go: float, period: float, dog_x: int, dog_y: int) -> str:
+    """The ball from second 0 to `stop` (when she stops to poop) and again from the moment she
+    reaches it after `go` (when she runs again) to the end of the loop."""
+    d = size("ball.png")[0]
+    top = dog_y + size("run-0.png")[1] - d  # the ball's top when it lies on the grass
+    nose = dog_x + NOSE_X
+    mid, amp = (BALL_GAP[0] + BALL_GAP[1]) / 2, (BALL_GAP[1] - BALL_GAP[0]) / 2
+
+    def swing(t: float) -> float:
+        return mid + amp * math.sin(2 * math.pi * t / BALL_GAP_S)
+
+    # while she poops, the ball lies on the meadow: it rolls on far enough that she reaches it
+    # just as she runs again (or BALL_ROLL_MIN, if she would reach it sooner)
+    x_stop = nose + swing(stop)
+    moved = at(ground_pts, go) - at(ground_pts, stop)  # negative: the ground moves left
+    roll = max(BALL_ROLL_MIN, nose + 2 - x_stop - moved)
+    reach = go
+    while reach < period and x_stop + roll + at(ground_pts, reach) - at(ground_pts, stop) > nose + 2:
+        reach += 0.01
+
+    def gap(t: float) -> float:
+        if t <= stop:
+            return swing(t)
+        g = 2 + (swing(t) - 2) * min(1.0, (t - reach) / 1.0)  # from her nose, out to the swing
+        if t > period - 1:  # back to where the loop starts
+            g += (swing(0) - g) * (t - (period - 1))
+        return g
+
+    xs = [(t, nose + gap(t)) for t in [i * 0.5 for i in range(int(stop / 0.5) + 1)] + [stop]]
+    t = reach
+    while t < period:
+        xs.append((t, nose + gap(t)))
+        t += 0.5
+    xs.append((period, nose + swing(0)))
+
+    # bounces: a whole number in each window, so the ball is on the grass when it stops and
+    # when it pops up again
+    keys = [(0.0, 0)]
+    for a, b in ((0.0, stop), (reach, period)):
+        if keys[-1][0] < a:
+            keys.append((a, 0))
+        n = max(1, round((b - a) / BALL_BOUNCE_S))
+        for i in range(n):
+            t0 = a + (b - a) * i / n
+            keys += [(t0 + (b - a) / n / 2, -BALL_BOUNCE_H), (t0 + (b - a) / n, 0)]
+    up, down, flat = "0 0 .58 1", ".42 0 1 1", "0 0 1 1"
+    splines = [up if y1 < y0 else down if y1 > y0 else flat for (_, y0), (_, y1) in zip(keys, keys[1:])]
+    bounce = (
+        f'<animateTransform attributeName="transform" type="translate" '
+        f'values="{";".join(f"0 {y}" for _, y in keys)}" '
+        f'keyTimes="{";".join(fmt(t / period) for t, _ in keys)}" calcMode="spline" '
+        f'keySplines="{";".join(splines)}" dur="{fmt(period)}s" repeatCount="indefinite"/>'
+    )
+    chased = (
+        "<g>" + discrete("display", ["inline", "none", "inline"], [0, stop, reach], period)
+        + f"<g>{linear(xs, period)}<g>{bounce}"
+        + f'<use href="#ball" x="0" y="{top}"/></g></g></g>'
+    )
+
+    # lying on the meadow: placed where the ground is when she stops, rolls on, then scrolls with
+    # the ground until she reaches it
+    roll_pts = [(0, 0), (stop, 0), (stop + BALL_ROLL_S / 2, roll * 0.75), (stop + BALL_ROLL_S, roll),
+                (period, roll)]
+    resting = (
+        "<g>" + discrete("display", ["none", "inline", "none"], [0, stop, reach], period)
+        + f"<g>{linear(ground_pts, period)}<g>{linear(roll_pts, period)}"
+        + f'<use href="#ball" x="{round(x_stop - at(ground_pts, stop))}" y="{top}"/></g></g></g>'
+    )
+    return chased + resting
 
 
 # Pooping while walking, the way the real Ferro does it (run_scene, pooping in one spot, is the
@@ -240,7 +327,8 @@ def at(points: list[tuple[float, float]], t: float) -> float:
     return points[-1][1]
 
 
-def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN_BEFORE) -> str:
+def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN_BEFORE,
+                   ball: bool = False) -> str:
     mw = meadow["width"]
     crouch_start = run_before
     walk_start = crouch_start + sum(s for _, s in CROUCH)
@@ -321,7 +409,11 @@ def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN
     drops_el = f"<g>{linear(ground_pts, period)}{drops}</g>"
 
     height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
-    body = layers + drops_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
+    ball_el = ""
+    if ball:
+        defs.append(sprite_def("ball", "ball.png"))
+        ball_el = ball_layer(ground_pts, crouch_start, poop_end, period, dog_x, dog_y)
+    body = layers + drops_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
     return svg(body, defs, meadow, height)
 
 
@@ -406,6 +498,12 @@ def main() -> None:
         (preview / f"{prefix}sleep.svg").write_text(sleep, encoding="utf-8")
         print(name, "RUN", len(run), "RUN-STILL", len(run_still), "SLEEP", len(sleep),
               "chars; limit 131072", "" if name in IN_MOD else "(preview only, not in the mod)")
+        # the ball: preview only for now
+        if k == 0:
+            for file, scene in (("ball-run.svg", run_walk_scene(meadow, dog_x, dog_y, ball=True)),
+                                ("ball-run-still.svg", run_scene(meadow, dog_x, dog_y, ball=True))):
+                (preview / file).write_text(scene, encoding="utf-8")
+                print(name, file, len(scene), "chars (preview only)")
 
     ts = (
         "// Generated by tools/scene.py - do not edit by hand.\n"
