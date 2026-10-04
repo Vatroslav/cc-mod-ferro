@@ -11,12 +11,16 @@ const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
 // The real Ferro poops while walking and only rarely stops to poop in one spot.
 const STILL_POOP_SHARE = 0.2
+// In about a third of the turns she chases an orange ball.
+const BALL_SHARE = 1 / 3
 
 const phase = atom({ plugin: 'mod-ferro', key: 'phase' } as const, null as FerroPhase)
 // This turn's background, an index into SCENES: picked at random on every turn.
 const scene = atom({ plugin: 'mod-ferro', key: 'scene' } as const, 0)
 // Whether this turn's run is the rare one where she poops in one spot, also picked per turn.
 const stillPoop = atom({ plugin: 'mod-ferro', key: 'stillPoop' } as const, false)
+// Whether she chases the ball this turn, also picked per turn.
+const ball = atom({ plugin: 'mod-ferro', key: 'ball' } as const, false)
 
 export const register: Register = on => {
   let timers: Timer[] = []
@@ -30,6 +34,7 @@ export const register: Register = on => {
     await update($, phase, () => null)
     await update($, scene, () => Math.floor(Math.random() * SCENES.length))
     await update($, stillPoop, () => Math.random() < STILL_POOP_SHARE)
+    await update($, ball, () => Math.random() < BALL_SHARE)
     timers = [
       $.clock.after(RUN_AFTER_MS, () => void update($, phase, () => 'run')),
       $.clock.after(SLEEP_AFTER_MS, () => void update($, phase, () => 'sleep')),
@@ -58,7 +63,11 @@ export const register: Register = on => {
 
     const { Box, Svg } = $.ui.resolve(e)
     const s = SCENES[await read($, scene)] ?? SCENES[0]
-    const run = (await read($, stillPoop)) ? s.runStill : s.run
+    const r = (await read($, stillPoop)) ? s.runStill : s.run
+    const withBall = await read($, ball)
+    // the ball is a piece of SVG inserted into the plain scene
+    const run = withBall ? r.svg.slice(0, r.ballAt) + r.ball + r.svg.slice(r.ballAt) : r.svg
+    const runAlt = withBall ? `Ferro chasing an orange ball across ${s.place}` : `Ferro running across ${s.place}`
 
     // Without an explicit width the frame stays at 300 px. Desktop counts the band in columns
     // of ~8 CSS pixels (measured 4.10.2026: 94 columns, ~753 px). On a narrower band the scene
@@ -69,7 +78,7 @@ export const register: Register = on => {
       <Box>
         <Svg
           source={now === 'sleep' ? s.sleep : run}
-          alt={now === 'sleep' ? `Ferro asleep on ${s.place}` : `Ferro running across ${s.place}`}
+          alt={now === 'sleep' ? `Ferro asleep on ${s.place}` : runAlt}
           width={width}
           height={s.height}
           isInteractive

@@ -3,6 +3,6 @@ export type FerroPhase = 'run' | 'sleep' | null
 
 declare module 'claude-code' {
   interface PluginState {
-    'mod-ferro': { phase: FerroPhase; scene: number; stillPoop: boolean }
+    'mod-ferro': { phase: FerroPhase; scene: number; stillPoop: boolean; ball: boolean }
   }
 }

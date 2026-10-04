@@ -47,10 +47,10 @@ test('after 20 s Ferro runs, after 3 min she sleeps, on the same background', as
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(20_000)
   const run = (await band($)).svg?.props.alt
-  expect(run).toMatch(/^Ferro running across the (autumn |winter )?meadow$/)
+  const place = run.match(/^Ferro (?:running|chasing an orange ball) across (the (?:autumn |winter )?meadow)$/)
+  expect(place).not.toBeNull()
   await clock.advance(160_000)
-  const sleep = (await band($)).svg?.props.alt
-  expect(sleep).toBe(run.replace('running across', 'asleep on'))
+  expect((await band($)).svg?.props.alt).toBe(`Ferro asleep on ${place[1]}`)
 })
 
 test('the end of the main turn closes the band, the end of a subagent does not', async ($: any, on) => {
@@ -87,9 +87,14 @@ test('the scenes of every background fit the Svg element limit', async () => {
   const { SCENES } = await import('./scene')
   expect(SCENES.length).toBeGreaterThan(0)
   for (const s of SCENES) {
-    expect(s.run.length).toBeLessThanOrEqual(131072)
-    expect(s.runStill.length).toBeLessThanOrEqual(131072)
+    for (const r of [s.run, s.runStill]) {
+      expect(r.svg.length + r.ball.length).toBeLessThanOrEqual(131072)
+      expect(r.svg + r.ball).not.toContain('<image')
+      // the ball goes in whole, inside the scene
+      const withBall = r.svg.slice(0, r.ballAt) + r.ball + r.svg.slice(r.ballAt)
+      expect(withBall.startsWith('<svg') && withBall.endsWith('</svg>')).toBe(true)
+      expect(withBall).toContain('<use href="#ball"')
+    }
     expect(s.sleep.length).toBeLessThanOrEqual(131072)
-    expect(s.run).not.toContain('<image')
   }
 })

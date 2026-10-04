@@ -6,6 +6,7 @@ A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a tur
 
 - each turn picks the summer or the autumn meadow at random (a winter meadow is built but switched off for now)
 - the meadow has three layers (clouds, hills with trees, grass) that scroll at different speeds
+- in about a third of the turns an orange ball bounces ahead of her and she chases it; when she stops to poop it rolls on and waits on the grass until she reaches it
 - roughly every 40 seconds Ferro poops the way the real Ferro does: hunched, walking slowly forward, leaving a row of droppings that scrolls away with the grass (in about one turn in five she stops and poops in one spot instead)
 - after 3 minutes Ferro lies down and falls asleep
 
@@ -24,7 +25,7 @@ When the turn ends, the band disappears. Nothing is interactive, so there is not
 **Rendering.** The Desktop band can draw an `Svg` element, but it does not render `<image>` with PNG data, so every frame is converted to vector strokes: one `<path>` per colour, one stroke per horizontal run of pixels, defined once in `<defs>` and placed with `<use>`. All animation is SMIL inside the SVG, so the mod draws the scene once and the browser engine animates it. `tools/scene.py` builds both scenes for each meadow into `plugin/hooks/scene.ts` and `preview/`.
 
 **Constraints that shaped it.**
-- The `Svg` element accepts at most 131,072 characters. The running scene is about 118k (110k with pooping in one spot) and the sleeping scene about 85k on the summer and autumn meadows; the more detailed winter meadow adds about 7k to each.
+- The `Svg` element accepts at most 131,072 characters. The running scene is about 118k (110k with pooping in one spot) and the sleeping scene about 85k on the summer and autumn meadows; the ball adds about 6k, and the more detailed winter meadow about 7k. The ball is a separate piece of SVG the mod inserts into the plain scene, so the scenes are not stored twice.
 - The loop is seamless: in one loop the ground travels exactly 20 meadow widths and the hills, at 0.35 of the ground speed, exactly 7.
 - ChatGPT returned the gallop frames out of phase order, which made Ferro look like she was running backwards. The real order is `[4, 3, 2, 5, 0]`.
 
