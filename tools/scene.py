@@ -39,9 +39,11 @@ WALK_AWAY_PX = 13  # koliko se odmakne od hrpice u zadnjem frameu
 GROUND_TILES = 20
 BACK_RATIO = 0.35
 
-# Spavanje: uvod (frame, sekunde), pa disanje između zadnja dva framea.
-SLEEP_INTRO = [(0, 0.6), (1, 0.6), (2, 1.6), (3, 1.0)]
-BREATH_S = 1.2
+# Spavanje: uvod (frame, sekunde), pa disanje na zadnjem frameu. Frameove disanja izvodi
+# build.py iz sleep-5 (leđa podignuta za piksel, glava na mjestu); ChatGPT bi svaki frame
+# nacrtao iznova, pa bi Ferro podrhtavala umjesto da diše.
+SLEEP_INTRO = [(0, 0.6), (1, 0.6), (2, 1.6), (3, 1.0), (4, 1.0)]
+BREATH = [("sleep-5", 1.3), ("sleep-breath-1", 0.45), ("sleep-breath-2", 1.0), ("sleep-breath-1", 0.55)]
 
 Z_GLYPH = ["####", "..#.", ".#..", "####"]
 
@@ -211,8 +213,9 @@ def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
 
 def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
     mw = meadow["width"]
-    frames = sorted(PX.glob("sleep-[0-9]*.png"), key=lambda f: int(f.stem.split("-")[1]))
-    defs = meadow_defs() + [sprite_def(f"s{i}", f.name) for i, f in enumerate(frames)]
+    breath_frames = list(dict.fromkeys(name for name, _ in BREATH))
+    defs = meadow_defs() + [sprite_def(f"s{i}", f"sleep-{i}.png") for i, _ in SLEEP_INTRO]
+    defs += [sprite_def(f"b{k}", f"{name}.png") for k, name in enumerate(breath_frames)]
 
     dog = ""
     t = 0.0
@@ -223,12 +226,15 @@ def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
         )
         t += s
     intro = t
-    last = len(frames) - 1
-    for k, i in enumerate((last - 1, last)):
-        vals = "visible;hidden" if k == 0 else "hidden;visible"
+    # disanje: petlja frameova iz BREATH, isti frame može doći više puta
+    period = sum(s for _, s in BREATH)
+    starts = [sum(s for _, s in BREATH[:j]) for j in range(len(BREATH))]
+    keys = ";".join(fmt(st / period) for st in starts)
+    for k, name in enumerate(breath_frames):
+        vals = ";".join("visible" if n == name else "hidden" for n, _ in BREATH)
         dog += (
-            f'<use href="#s{i}" visibility="hidden"><animate attributeName="visibility" '
-            f'values="{vals}" dur="{fmt(2 * BREATH_S)}s" begin="{fmt(intro)}s" '
+            f'<use href="#b{k}" visibility="hidden"><animate attributeName="visibility" '
+            f'values="{vals}" keyTimes="{keys}" dur="{fmt(period)}s" begin="{fmt(intro)}s" '
             f'calcMode="discrete" repeatCount="indefinite"/></use>'
         )
 

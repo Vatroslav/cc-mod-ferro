@@ -240,6 +240,33 @@ def load_palette() -> np.ndarray:
     return np.array([[int(h[i : i + 2], 16) for i in (1, 3, 5)] for h in hexes])
 
 
+# Disanje: iz zadnjeg framea spavanja nastanu frameovi u kojima su leđa podignuta za piksel.
+# Stupci su izmjereni na sleep-5 (4.10.2026.): leđa su luk od x 9 do 31, vrat do 35, glava
+# s ušima desno od toga i ostaje na mjestu. Nakon novog crteža spavanja provjeriti stupce.
+BREATH_FROM = "sleep-5"
+BREATH_RAISE = {1: (16, 27), 2: (11, 31)}  # frame: stupci (od, do) koji se dignu za piksel
+BREATH_DEPTH = 4  # koliko redova ispod obruba se pomakne gore; red ispod se ponovi (krzno)
+
+
+def breathing(palette: np.ndarray, dark: set, outline: int) -> None:
+    src = np.asarray(Image.open(OUT / f"{BREATH_FROM}.png").convert("RGBA"))
+    dark_rgb = {tuple(int(c) for c in palette[i]) for i in dark}
+    for k, (x0, x1) in BREATH_RAISE.items():
+        a = src.copy()
+        for x in range(x0, x1 + 1):
+            top = int(np.argmax(a[:, x, 3] > 0))
+            a[top - 1 : top + BREATH_DEPTH, x] = src[top : top + BREATH_DEPTH + 1, x]
+        # gdje je stepenica viša od piksela, krzno je ostalo uz pozadinu: zatvoriti obrub
+        solid = a[..., 3] > 0
+        p = np.pad(solid, 1)
+        exposed = solid & ~(p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:])
+        for y, x in zip(*np.where(exposed)):
+            if tuple(int(c) for c in a[y, x, :3]) not in dark_rgb:
+                a[y, x, :3] = palette[outline]
+        Image.fromarray(a, "RGBA").save(OUT / f"sleep-breath-{k}.png")
+        print("disanje", k, "stupci", x0, "-", x1)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "meadow.json").write_text(json.dumps(meadow()))
@@ -319,6 +346,8 @@ def main() -> None:
             (OUT / f"{name}-pile.json").write_text(json.dumps(pile))
             print(name, "pile", pile)
             break
+
+    breathing(palette, dark, outline)
 
 
 if __name__ == "__main__":
