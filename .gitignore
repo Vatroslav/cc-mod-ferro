@@ -1,5 +1,4 @@
-# generirano iz tools/scene.py, samo za pregled u pregledniku
-preview/*.svg
+# preview/*.svg se commita: generira ga tools/scene.py, a README ga prikazuje kao animaciju
 __pycache__/
 
 # usporedbe prije/poslije, samo za pregled
