@@ -88,6 +88,7 @@ test('the scenes of every background fit the Svg element limit', async () => {
   expect(SCENES.length).toBeGreaterThan(0)
   for (const s of SCENES) {
     expect(s.run.length).toBeLessThanOrEqual(131072)
+    expect(s.runStill.length).toBeLessThanOrEqual(131072)
     expect(s.sleep.length).toBeLessThanOrEqual(131072)
     expect(s.run).not.toContain('<image')
   }

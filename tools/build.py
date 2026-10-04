@@ -106,13 +106,30 @@ def downsample(idx: np.ndarray, factor: float, transparent: int) -> np.ndarray:
 
 
 def catchlights(px: np.ndarray, white: np.ndarray, factor: float, white_i: int, dark: set) -> None:
-    """Each highlight in the source becomes one white pixel, if it lands on a dark one (the eye).
-    Downsampling would lose it otherwise, because it is never the most common colour in its block."""
+    """The eye highlight in the source becomes one white pixel, if it lands on a dark one (the eye).
+    Downsampling would lose it otherwise, because it is never the most common colour in its block.
+    Only the largest white speck on the head counts (the right 40% and top 60% of the figure):
+    stray specks also land on dark pixels, and one on the outline of a hind leg looked like a
+    hole in the outline."""
+    # a big highlight can also win its block in downsampling: it takes its neighbours' colour,
+    # so the eye keeps exactly one white pixel
+    for y, x in zip(*np.where(px == white_i)):
+        around = [px[j, i] for j, i in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1))
+                  if 0 <= j < px.shape[0] and 0 <= i < px.shape[1] and px[j, i] != white_i]
+        px[y, x] = max(set(around), key=around.count)
     lab, k = ndimage.label(white)
-    for cy, cx in ndimage.center_of_mass(white, lab, range(1, k + 1)):
+    if k == 0:
+        return
+    areas = ndimage.sum(white, lab, range(1, k + 1))
+    best = None
+    for area, (cy, cx) in zip(areas, ndimage.center_of_mass(white, lab, range(1, k + 1))):
         y, x = int(cy / factor), int(cx / factor)
-        if y < px.shape[0] and x < px.shape[1] and px[y, x] in dark:
-            px[y, x] = white_i
+        on_head = x >= px.shape[1] * 0.6 and y <= px.shape[0] * 0.6
+        if on_head and y < px.shape[0] and x < px.shape[1] and px[y, x] in dark:
+            if best is None or area > best[0]:
+                best = (area, y, x)
+    if best is not None:
+        px[best[1], best[2]] = white_i
 
 
 def clean_edges(px: np.ndarray, transparent: int, dark: set, protect: set, outline: int) -> None:

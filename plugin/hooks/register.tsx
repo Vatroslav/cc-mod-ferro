@@ -9,10 +9,14 @@ const RUN_AFTER_MS = 20_000
 // When Claude works for too long, Ferro lies down and falls asleep.
 const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
+// The real Ferro poops while walking and only rarely stops to poop in one spot.
+const STILL_POOP_SHARE = 0.2
 
 const phase = atom({ plugin: 'mod-ferro', key: 'phase' } as const, null as FerroPhase)
 // This turn's background, an index into SCENES: picked at random on every turn.
 const scene = atom({ plugin: 'mod-ferro', key: 'scene' } as const, 0)
+// Whether this turn's run is the rare one where she poops in one spot, also picked per turn.
+const stillPoop = atom({ plugin: 'mod-ferro', key: 'stillPoop' } as const, false)
 
 export const register: Register = on => {
   let timers: Timer[] = []
@@ -25,6 +29,7 @@ export const register: Register = on => {
     cancelTimers()
     await update($, phase, () => null)
     await update($, scene, () => Math.floor(Math.random() * SCENES.length))
+    await update($, stillPoop, () => Math.random() < STILL_POOP_SHARE)
     timers = [
       $.clock.after(RUN_AFTER_MS, () => void update($, phase, () => 'run')),
       $.clock.after(SLEEP_AFTER_MS, () => void update($, phase, () => 'sleep')),
@@ -53,6 +58,7 @@ export const register: Register = on => {
 
     const { Box, Svg } = $.ui.resolve(e)
     const s = SCENES[await read($, scene)] ?? SCENES[0]
+    const run = (await read($, stillPoop)) ? s.runStill : s.run
 
     // Without an explicit width the frame stays at 300 px. Desktop counts the band in columns
     // of ~8 CSS pixels (measured 4.10.2026: 94 columns, ~753 px). On a narrower band the scene
@@ -62,7 +68,7 @@ export const register: Register = on => {
     return (
       <Box>
         <Svg
-          source={now === 'sleep' ? s.sleep : s.run}
+          source={now === 'sleep' ? s.sleep : run}
           alt={now === 'sleep' ? `Ferro asleep on ${s.place}` : `Ferro running across ${s.place}`}
           width={width}
           height={s.height}
