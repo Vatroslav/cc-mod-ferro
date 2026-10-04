@@ -80,9 +80,12 @@ test('širina prati traku, najviše 1280 px', async ($: any, on) => {
   expect((await band($, 'desktop', props(10))).svg?.props.width).toBe(300)
 })
 
-test('scene stanu u limit Svg elementa', async () => {
-  const { RUN_SVG, SLEEP_SVG } = await import('./scene')
-  expect(RUN_SVG.length).toBeLessThanOrEqual(131072)
-  expect(SLEEP_SVG.length).toBeLessThanOrEqual(131072)
-  expect(RUN_SVG).not.toContain('<image')
+test('scene svih pozadina stanu u limit Svg elementa', async () => {
+  const { SCENES } = await import('./scene')
+  expect(SCENES.length).toBeGreaterThan(0)
+  for (const s of SCENES) {
+    expect(s.run.length).toBeLessThanOrEqual(131072)
+    expect(s.sleep.length).toBeLessThanOrEqual(131072)
+    expect(s.run).not.toContain('<image')
+  }
 })

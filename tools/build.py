@@ -129,13 +129,16 @@ def clean_edges(px: np.ndarray, transparent: int, dark: set, protect: set, outli
 
 MEADOW_FX, MEADOW_FY = 10.0, 9.3  # livada nema kvadratne "piksele"
 MEADOW_COLORS = 48
+# Pozadine: assets/src/<ime>.png -> assets/px/<ime>-clouds/back/ground.png i <ime>.json.
+# Mod svaki turn nasumično bira jednu (Vatra, 4.10.2026.).
+BACKGROUNDS = ["meadow"]
 SKY_H = 20  # redova neba iznad brda u traci
 GROUND_H = 27  # redova trave ispod grmlja u traci
 
 
-def meadow() -> dict:
-    """Livada u tri sloja: oblaci (presloženi u nisko nebo), brda s drvećem, trava."""
-    q = Image.open(SRC / "meadow.png").convert("RGB").quantize(
+def meadow(name: str) -> dict:
+    """Pozadina u tri sloja: oblaci (presloženi u nisko nebo), brda s drvećem, trava."""
+    q = Image.open(SRC / f"{name}.png").convert("RGB").quantize(
         MEADOW_COLORS, method=Image.Quantize.MEDIANCUT
     )
     pal = np.array(q.getpalette()[: MEADOW_COLORS * 3]).reshape(-1, 3)
@@ -177,12 +180,12 @@ def meadow() -> dict:
         tgt = clouds[y : y + ch, box[1]]
         tgt[m, :3] = part[m]
         tgt[m, 3] = 255
-    Image.fromarray(clouds, "RGBA").save(OUT / "meadow-clouds.png")
+    Image.fromarray(clouds, "RGBA").save(OUT / f"{name}-clouds.png")
 
     back = rgb[hills_top:grass_top]
-    rgba(back, not_sky[hills_top:grass_top]).save(OUT / "meadow-back.png")
+    rgba(back, not_sky[hills_top:grass_top]).save(OUT / f"{name}-back.png")
     ground = rgb[grass_top : grass_top + GROUND_H]
-    rgba(ground, np.ones(ground.shape[:2], bool)).save(OUT / "meadow-ground.png")
+    rgba(ground, np.ones(ground.shape[:2], bool)).save(OUT / f"{name}-ground.png")
 
     info = {
         "sky": "#%02x%02x%02x" % tuple(int(c) for c in sky),
@@ -191,7 +194,7 @@ def meadow() -> dict:
         "ground_h": GROUND_H,
         "sky_h": SKY_H,
     }
-    print("meadow", w, "x", h, "hills", hills_top, "grass", grass_top, info)
+    print(name, w, "x", h, "hills", hills_top, "grass", grass_top, info)
     return info
 
 
@@ -272,7 +275,8 @@ def breathing(palette: np.ndarray, dark: set, outline: int) -> None:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "meadow.json").write_text(json.dumps(meadow()))
+    for name in BACKGROUNDS:
+        (OUT / f"{name}.json").write_text(json.dumps(meadow(name)))
     sheets = {n: np.asarray(Image.open(SRC / f"{n}.png").convert("RGB")) for n in FACTOR}
 
     bgs = {n: background_mask(s) for n, s in sheets.items()}

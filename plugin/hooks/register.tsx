@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
 
 import type { FerroPhase } from '../types'
-import { RUN_SVG, SCENE_HEIGHT, SCENE_MAX_WIDTH, SLEEP_SVG } from './scene'
+import { SCENE_MAX_WIDTH, SCENES } from './scene'
 
 // Ferro izađe tek kad turn traje dulje od ovoga, da kratki odgovori ne trepću trakom.
 const RUN_AFTER_MS = 20_000
@@ -11,6 +11,8 @@ const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
 
 const phase = atom({ plugin: 'mod-ferro', key: 'phase' } as const, null as FerroPhase)
+// Pozadina ovog turna, indeks u SCENES: svaki turn nasumično (Vatra, 4.10.2026.).
+const scene = atom({ plugin: 'mod-ferro', key: 'scene' } as const, 0)
 
 export const register: Register = on => {
   let timers: Timer[] = []
@@ -22,6 +24,7 @@ export const register: Register = on => {
   on('turn.start', async ($, e, next) => {
     cancelTimers()
     await update($, phase, () => null)
+    await update($, scene, () => Math.floor(Math.random() * SCENES.length))
     timers = [
       $.clock.after(RUN_AFTER_MS, () => void update($, phase, () => 'run')),
       $.clock.after(SLEEP_AFTER_MS, () => void update($, phase, () => 'sleep')),
@@ -49,6 +52,7 @@ export const register: Register = on => {
     }
 
     const { Box, Svg } = $.ui.resolve(e)
+    const s = SCENES[await read($, scene)] ?? SCENES[0]
 
     // Bez zadane širine okvir ostaje na 300 px. Desktop broji traku u stupcima od ~8 CSS
     // piksela (izmjereno 4.10.2026.: 94 stupca, ~753 px). Scena se na užoj traci reže sa
@@ -58,10 +62,10 @@ export const register: Register = on => {
     return (
       <Box>
         <Svg
-          source={now === 'sleep' ? SLEEP_SVG : RUN_SVG}
-          alt={now === 'sleep' ? 'Ferro spava na livadi' : 'Ferro trči po livadi'}
+          source={now === 'sleep' ? s.sleep : s.run}
+          alt={now === 'sleep' ? `Ferro spava na ${s.place}` : `Ferro trči po ${s.place}`}
           width={width}
-          height={SCENE_HEIGHT}
+          height={s.height}
           isInteractive
         />
       </Box>

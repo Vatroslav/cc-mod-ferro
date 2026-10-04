@@ -45,6 +45,10 @@ BACK_RATIO = 0.35
 SLEEP_INTRO = [(0, 0.6), (1, 0.6), (2, 1.6), (3, 1.0), (4, 1.0)]
 BREATH = [("sleep-5", 1.8), ("sleep-breath-1", 1.2)]
 
+# Pozadine iz build.py (ime: gdje je Ferro, za alt tekst). Mod svaki turn nasumično bira
+# jednu. Pregled prve ide u preview/run.svg i sleep.svg, ostalih u preview/<ime>-run.svg.
+BACKGROUNDS = {"meadow": "livadi"}
+
 Z_GLYPH = ["####", "..#.", ".#..", "####"]
 
 
@@ -110,11 +114,12 @@ def tiles(tile: str, y: int, width: int, travel: float) -> str:
     return "".join(f'<use href="#{tile}" x="{k * width}" y="{y}"/>' for k in range(copies))
 
 
-def meadow_defs() -> list[str]:
+def meadow_defs(meadow: dict) -> list[str]:
+    name = meadow["name"]
     return [
-        sprite_def("clouds", "meadow-clouds.png"),
-        sprite_def("back", "meadow-back.png"),
-        sprite_def("ground", "meadow-ground.png"),
+        sprite_def("clouds", f"{name}-clouds.png"),
+        sprite_def("back", f"{name}-back.png"),
+        sprite_def("ground", f"{name}-ground.png"),
     ]
 
 
@@ -153,7 +158,7 @@ def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
     y_back = meadow["sky_h"]
     y_ground = meadow["sky_h"] + meadow["back_h"]
 
-    defs = meadow_defs() + [sprite_def("pile", "poop-pile.png")]
+    defs = meadow_defs(meadow) + [sprite_def("pile", "poop-pile.png")]
     for i in sorted(set(RUN_ORDER)):
         defs.append(sprite_def(f"r{i}", f"run-{i}.png"))
     for i, _ in enumerate(POOP):
@@ -214,7 +219,7 @@ def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
 def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
     mw = meadow["width"]
     breath_frames = list(dict.fromkeys(name for name, _ in BREATH))
-    defs = meadow_defs() + [sprite_def(f"s{i}", f"sleep-{i}.png") for i, _ in SLEEP_INTRO]
+    defs = meadow_defs(meadow) + [sprite_def(f"s{i}", f"sleep-{i}.png") for i, _ in SLEEP_INTRO]
     defs += [sprite_def(f"b{k}", f"{name}.png") for k, name in enumerate(breath_frames)]
 
     dog = ""
@@ -270,28 +275,29 @@ def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
 
 
 def main() -> None:
-    meadow = json.loads((PX / "meadow.json").read_text())
-    height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
     dog_w, dog_h = size("run-0.png")
-    dog_x = VW // 2 - dog_w // 2 - 20
-    dog_y = height - dog_h - 2
-    run = run_scene(meadow, dog_x, dog_y)
-    sleep = sleep_scene(meadow, dog_x, dog_y)
+    preview = ROOT / "preview"
+    preview.mkdir(exist_ok=True)
+    scenes = []
+    for k, (name, place) in enumerate(BACKGROUNDS.items()):
+        meadow = json.loads((PX / f"{name}.json").read_text()) | {"name": name}
+        height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
+        dog_x = VW // 2 - dog_w // 2 - 20
+        dog_y = height - dog_h - 2
+        run = run_scene(meadow, dog_x, dog_y)
+        sleep = sleep_scene(meadow, dog_x, dog_y)
+        scenes.append({"place": place, "height": height * SCALE, "run": run, "sleep": sleep})
+        prefix = "" if k == 0 else f"{name}-"
+        (preview / f"{prefix}run.svg").write_text(run, encoding="utf-8")
+        (preview / f"{prefix}sleep.svg").write_text(sleep, encoding="utf-8")
+        print(name, "RUN", len(run), "znakova; SLEEP", len(sleep), "znakova; limit 131072")
 
     ts = (
         "// Generirano iz tools/scene.py - ne uređivati ručno.\n"
-        f"export const SCENE_HEIGHT = {height * SCALE}\n"
         f"export const SCENE_MAX_WIDTH = {VW * SCALE}\n"
-        f"export const RUN_SVG = {json.dumps(run)}\n"
-        f"export const SLEEP_SVG = {json.dumps(sleep)}\n"
+        f"export const SCENES = {json.dumps(scenes)}\n"
     )
     (ROOT / "plugin" / "hooks" / "scene.ts").write_text(ts, encoding="utf-8")
-
-    preview = ROOT / "preview"
-    preview.mkdir(exist_ok=True)
-    (preview / "run.svg").write_text(run, encoding="utf-8")
-    (preview / "sleep.svg").write_text(sleep, encoding="utf-8")
-    print("RUN", len(run), "znakova; SLEEP", len(sleep), "znakova; limit 131072")
 
 
 if __name__ == "__main__":
