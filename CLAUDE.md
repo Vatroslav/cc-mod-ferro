@@ -20,6 +20,7 @@ Claude Code mod za zabavu: Ferro (Vatrina ženka, Norwich terijer) trči po pixe
 - Pregled animacije u pregledniku: u personal-os `preview_start ferro` (`.claude/launch.json` poslužuje `preview/`).
 
 ## Naučeno
+- **Instalirani mod u običnoj sesiji ne radi bez zastavice** (4.10.2026.). Modovi instaliranih pluginova su iza Anthropicovog rollout prekidača, a za Vatrin račun je ugašen (`"tengu_plugin_hooks_modules": false` u `~/.claude.json`). Desktop 2.1.286 tad ne pokreće hookove instaliranih pluginova. Mod iz `~/.claude/dev-mods` s uključenim hot reloadom ide mimo prekidača, pa je proba u sesiji radila, a instalirana verzija nije. Kad je hot reload u sesiji uključen, radi i instalirana. Trajno rješenje je `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` u `env` bloku `~/.claude/settings.json`. Mod u običnoj sesiji provjeravati tek u novoj sesiji bez hot reloada.
 - **Redoslijed galopa:** ChatGPT je frameove trčanja poslagao bez reda faza i Ferro je izgledala kao da trči unazad. Pravi redoslijed je `[4, 3, 2, 5, 0]` (`RUN_ORDER`): ispružena, doskok prednjima, stražnje naprijed, skupljena, odraz. Frame 1 je višak.
 - **Tempo:** 0,13 s po frameu, jer su s 0,085 s noge izgledale kao da se trzaju. Trava ide 80 px/s, iako šapa na tlu ide ~42 px/s. Vatri je brža pozadina draža od savršenog koraka, a vlati preko šapa nisu pomogle.
 - **Petlja bez skoka:** drugo trčanje traje toliko da tlo u petlji prijeđe točno 20 širina livade, a brda (0,35 brzine) točno 7.
