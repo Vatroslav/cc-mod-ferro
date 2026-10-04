@@ -21,8 +21,9 @@ PALETTE_FILE = ROOT / "assets" / "palette.json"
 
 # How many source pixels make one real pixel. The dog is drawn at a different size in each
 # image, so the factor evens out the dog's height from ear tip to ground (run ~240, poop and
-# sleep ~220, poop-walk ~236).
-FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8}
+# sleep ~220, poop-walk ~236). sit.png is drawn bigger still, with a bigger head: 9.0 makes
+# the head the size of the other frames.
+FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8, "sit": 9.0}
 # Sheets whose small figures are a row of droppings: each one is saved on its own as
 # <name>-drop-<i>.png. In poop.png the small figure is the pile next to the frame making it.
 # ChatGPT drew them bigger than asked (the largest as wide as a third of the dog), so they get
@@ -77,6 +78,9 @@ def components(rgb: np.ndarray, min_area: int):
 # All frames go on the same canvas: the right edge of the right ear at ANCHOR_X, ground at the bottom.
 CANVAS_W, CANVAS_H = 76, 44
 ANCHOR_X = 54
+# Sheets where the head turns, so the ear moves: their frames are aligned on the front toes
+# (the rightmost pixel of the bottom rows) instead, which stay planted.
+TOES_X = {"sit": 54}
 
 
 def ear_right(px: np.ndarray, transparent: int) -> int:
@@ -105,12 +109,15 @@ def downsample(idx: np.ndarray, factor: float, transparent: int) -> np.ndarray:
     return out
 
 
-def catchlights(px: np.ndarray, white: np.ndarray, factor: float, white_i: int, dark: set) -> None:
-    """The eye highlight in the source becomes one white pixel, if it lands on a dark one (the eye).
+def catchlights(px: np.ndarray, white: np.ndarray, factor: float, white_i: int, dark: set,
+                transparent: int) -> None:
+    """Each eye highlight in the source becomes one white pixel, if it lands on a dark eye.
     Downsampling would lose it otherwise, because it is never the most common colour in its block.
-    Only the largest white speck on the head counts (the right 40% and top 60% of the figure):
-    stray specks also land on dark pixels, and one on the outline of a hind leg looked like a
-    hole in the outline."""
+    Only specks on the head count (the right 65% and top 60% of the figure, which also takes in
+    the head of a sitting dog facing the viewer), only on a dark patch that does not touch the
+    background (an eye, not the outline), and only the largest speck per eye: stray specks also
+    land on dark pixels, and one on the outline of a hind leg looked like a hole in the outline.
+    A dog facing the viewer gets one highlight in each eye."""
     # a big highlight can also win its block in downsampling: it takes its neighbours' colour,
     # so the eye keeps exactly one white pixel
     for y, x in zip(*np.where(px == white_i)):
@@ -120,16 +127,20 @@ def catchlights(px: np.ndarray, white: np.ndarray, factor: float, white_i: int, 
     lab, k = ndimage.label(white)
     if k == 0:
         return
+    eyes, _ = ndimage.label(np.isin(px, list(dark)))
+    by_background = set(np.unique(eyes[ndimage.binary_dilation(px == transparent)])) | {0}
     areas = ndimage.sum(white, lab, range(1, k + 1))
-    best = None
+    best = {}  # eye: (area, y, x)
     for area, (cy, cx) in zip(areas, ndimage.center_of_mass(white, lab, range(1, k + 1))):
         y, x = int(cy / factor), int(cx / factor)
-        on_head = x >= px.shape[1] * 0.6 and y <= px.shape[0] * 0.6
-        if on_head and y < px.shape[0] and x < px.shape[1] and px[y, x] in dark:
-            if best is None or area > best[0]:
-                best = (area, y, x)
-    if best is not None:
-        px[best[1], best[2]] = white_i
+        on_head = x >= px.shape[1] * 0.35 and y <= px.shape[0] * 0.6
+        if not (on_head and y < px.shape[0] and x < px.shape[1]):
+            continue
+        eye = eyes[y, x]
+        if eye not in by_background and (eye not in best or area > best[eye][0]):
+            best[eye] = (area, y, x)
+    for _, y, x in best.values():
+        px[y, x] = white_i
 
 
 def clean_edges(px: np.ndarray, transparent: int, dark: set, protect: set, outline: int) -> None:
@@ -320,6 +331,33 @@ BREATH_FROM = "sleep-5"
 BREATH_RAISE = {1: (17, 35)}  # frame: columns (from, to) raised by one pixel
 BREATH_DEPTH = 4  # how many rows below the outline move up; the row below is repeated (fur)
 
+# Blinking while she sits and looks at the viewer: derived from that frame, so nothing but the
+# eyes moves. Each eye (a dark patch holding a highlight) is filled with the fur around it and
+# its bottom row is drawn back in the outline colour, a closed eye.
+BLINK_FROM = "sit-4"
+
+
+def blink(palette: np.ndarray, dark: set, outline: int) -> None:
+    a = np.asarray(Image.open(OUT / f"{BLINK_FROM}.png").convert("RGBA")).copy()
+    key = a[..., 0].astype(int) << 16 | a[..., 1].astype(int) << 8 | a[..., 2]
+    dark_keys = {int(palette[i][0]) << 16 | int(palette[i][1]) << 8 | int(palette[i][2]) for i in dark}
+    white = (a[..., :3].astype(int).min(2) > 235) & (a[..., 3] > 0)
+    eyes, k = ndimage.label((np.isin(key, list(dark_keys)) | white) & (a[..., 3] > 0))
+    for i in range(1, k + 1):
+        eye = eyes == i
+        if not (eye & white).any():
+            continue  # the nose and the outline have no highlight
+        around = ndimage.binary_dilation(eye) & ~eye & (a[..., 3] > 0)
+        colors, counts = np.unique(key[around], return_counts=True)
+        fur = int(colors[counts.argmax()])
+        ys, xs = np.where(eye)
+        a[eye, :3] = [fur >> 16, fur >> 8 & 255, fur & 255]
+        bottom = eye & (np.arange(a.shape[0])[:, None] == ys.max())
+        a[bottom, :3] = palette[outline]
+    Image.fromarray(a, "RGBA").save(OUT / "sit-blink.png")
+    print("blink from", BLINK_FROM)
+
+
 # The orange ball she chases is drawn here, not by ChatGPT: a pixel circle with Ferro's outline,
 # lit from the top left. 9 pixels is about a dog ball next to a Norwich Terrier.
 BALL_D = 9
@@ -410,8 +448,10 @@ def main() -> None:
             px = downsample(crop, factor, transparent)
             # the ear used for alignment is measured before cleaning, so frames stay where they were
             ear = ear_right(px, transparent) if px.shape[1] >= 20 else 0
+            if name in TOES_X and px.shape[1] >= 20:
+                ear = int(np.where((px[-2:] != transparent).any(0))[0].max())  # front toes
             clean_edges(px, transparent, dark, {tongue_i, white_i}, outline)
-            catchlights(px, white[box] & own, factor, white_i, dark)
+            catchlights(px, white[box] & own, factor, white_i, dark, transparent)
             solid = px != transparent
             out = np.zeros((*px.shape, 4), dtype=np.uint8)
             out[solid, :3] = palette[px[solid]]
@@ -423,7 +463,7 @@ def main() -> None:
             if px.shape[1] < 20:  # the pile, not the dog
                 continue
             # alignment: ear at ANCHOR_X, height from the source image's ground
-            x = ANCHOR_X - ear
+            x = TOES_X.get(name, ANCHOR_X) - ear
             y = CANVAS_H - int(round((ground - box[0].start) / FACTOR[name]))
             canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H))
             canvas.paste(img, (x, y), img)
@@ -458,6 +498,7 @@ def main() -> None:
 
     breathing(palette, dark, outline)
     ball(palette[outline])
+    blink(palette, dark, outline)
 
 
 if __name__ == "__main__":

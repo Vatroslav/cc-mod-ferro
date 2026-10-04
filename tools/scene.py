@@ -327,6 +327,27 @@ def at(points: list[tuple[float, float]], t: float) -> float:
     return points[-1][1]
 
 
+def cycle(prefix: str, frames: list, frame_s: float) -> str:
+    """Frames shown one after another in their own fast loop."""
+    out = ""
+    for slot, frame in enumerate(frames):
+        vals = ";".join("visible" if j == slot else "hidden" for j in range(len(frames)))
+        out += (
+            f'<use href="#{prefix}{frame}" visibility="hidden"><animate attributeName="visibility" '
+            f'values="{vals}" dur="{fmt(frame_s * len(frames))}s" calcMode="discrete" '
+            f'repeatCount="indefinite"/></use>'
+        )
+    return out
+
+
+def shown(inner: str, start: float, end: float, period: float) -> str:
+    """Shown only from second `start` to `end` of the loop."""
+    return (
+        "<g>" + discrete("display", ["none", "inline", "none"], [0, start, end], period)
+        + inner + "</g>"
+    )
+
+
 def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN_BEFORE,
                    ball: bool = False) -> str:
     mw = meadow["width"]
@@ -361,24 +382,6 @@ def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN
         + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
     )
 
-    def cycle(prefix: str, frames: list, frame_s: float) -> str:
-        """Frames shown one after another in their own fast loop."""
-        out = ""
-        for slot, frame in enumerate(frames):
-            vals = ";".join("visible" if j == slot else "hidden" for j in range(len(frames)))
-            out += (
-                f'<use href="#{prefix}{frame}" visibility="hidden"><animate attributeName="visibility" '
-                f'values="{vals}" dur="{fmt(frame_s * len(frames))}s" calcMode="discrete" '
-                f'repeatCount="indefinite"/></use>'
-            )
-        return out
-
-    def shown(inner: str, start: float, end: float) -> str:
-        return (
-            "<g>" + discrete("display", ["none", "inline", "none"], [0, start, end], period)
-            + inner + "</g>"
-        )
-
     run_group = (
         "<g>"
         + discrete("display", ["inline", "none", "inline"], [0, crouch_start, poop_end], period)
@@ -388,10 +391,10 @@ def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN
     dog = run_group
     t = crouch_start
     for i, s in CROUCH:
-        dog += shown(f'<use href="#p{i}"/>', t, t + s)
+        dog += shown(f'<use href="#p{i}"/>', t, t + s, period)
         t += s
-    dog += shown(cycle("w", list(range(len(walk_frames))), HUNCH_FRAME_S), walk_start, walk_end)
-    dog += shown(f'<use href="#p{len(POOP) - 1}"/>', walk_end, poop_end)
+    dog += shown(cycle("w", list(range(len(walk_frames))), HUNCH_FRAME_S), walk_start, walk_end, period)
+    dog += shown(f'<use href="#p{len(POOP) - 1}"/>', walk_end, poop_end, period)
 
     # droppings lie on the meadow: each is placed where the ground is when it falls, then
     # scrolls with the ground
@@ -413,6 +416,58 @@ def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN
     if ball:
         ball_el = ball_layer(ground_pts, crouch_start, poop_end, period, dog_x, dog_y)
     body = layers + drops_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
+    return svg(body, defs, meadow, height)
+
+
+# Sitting and looking at the viewer, a turn of its own instead of pooping: run, brake, sit, turn
+# the head to the viewer, blink and tilt the head, turn back, stand up, run. The frames are
+# sit.png (0 brake, 1 sitting down, 2 sitting in profile, 3 head three-quarters, 4 facing the
+# viewer, 5 head tilt) and sit-blink.png, derived from 4.
+SIT = [(0, 0.3), (1, 0.3), (2, 0.5), (3, 0.3), (4, 1.6), ("blink", 0.15), (4, 1.2), (5, 1.4),
+       (4, 1.0), ("blink", 0.15), (4, 0.6), (3, 0.3), (2, 0.4), (1, 0.3)]  # (frame, seconds)
+BRAKE_PX = 10  # how far the ground still moves while she brakes
+
+
+def run_sit_scene(meadow: dict, dog_x: int, dog_y: int, ball: bool = False,
+                  run_before: float = RUN_BEFORE) -> str:
+    mw = meadow["width"]
+    sit_start = run_before
+    brake_end = sit_start + SIT[0][1]
+    sit_end = sit_start + sum(s for _, s in SIT)
+    ground_total = GROUND_TILES * mw
+    d1 = run_before * RUN_SPEED
+    d2 = d1 + BRAKE_PX
+    period = sit_end + (ground_total - d2) / RUN_SPEED
+
+    # path of the ground: runs, slows down while she brakes, stands while she sits, runs
+    ground_pts = [(0, 0), (sit_start, -d1), (brake_end, -d2), (sit_end, -d2), (period, -ground_total)]
+    back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
+    y_back = meadow["sky_h"]
+    y_ground = meadow["sky_h"] + meadow["back_h"]
+
+    defs = meadow_defs(meadow)
+    defs += [sprite_def(f"r{i}", f"run-{i}.png") for i in sorted(set(RUN_ORDER))]
+    defs += [sprite_def(f"s{f}", f"sit-{f}.png") for f in dict.fromkeys(f for f, _ in SIT)]
+
+    layers = (
+        clouds_layer(meadow)
+        + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
+        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
+    )
+    dog = (
+        "<g>"
+        + discrete("display", ["inline", "none", "inline"], [0, sit_start, sit_end], period)
+        + cycle("r", RUN_ORDER, RUN_FRAME_S)
+        + "</g>"
+    )
+    t = sit_start
+    for f, s in SIT:
+        dog += shown(f'<use href="#s{f}"/>', t, t + s, period)
+        t += s
+
+    height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
+    ball_el = ball_layer(ground_pts, sit_start, sit_end, period, dog_x, dog_y) if ball else ""
+    body = layers + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
     return svg(body, defs, meadow, height)
 
 
@@ -497,6 +552,12 @@ def main() -> None:
             (preview / f"{prefix}{file}.svg").write_text(plain, encoding="utf-8")
             (preview / f"{prefix}ball-{file}.svg").write_text(with_ball, encoding="utf-8")
             print(name, key, len(plain), "with the ball", len(with_ball), "chars; limit 131072")
+        # sitting and looking at the viewer: preview only for now, starting after 3 s
+        if name in IN_MOD:
+            for file, ball in (("sit-preview.svg", False), ("ball-sit-preview.svg", True)):
+                sit = run_sit_scene(meadow, dog_x, dog_y, ball=ball, run_before=3.0)
+                (preview / f"{prefix}{file}").write_text(sit, encoding="utf-8")
+                print(name, file, len(sit), "chars (preview only)")
         sleep = sleep_scene(meadow, dog_x, dog_y)
         (preview / f"{prefix}sleep.svg").write_text(sleep, encoding="utf-8")
         print(name, "sleep", len(sleep), "chars", "" if name in IN_MOD else "(preview only, not in the mod)")
