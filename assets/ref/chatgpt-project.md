@@ -60,3 +60,24 @@ ChatGPT drew the dog a little longer and the droppings much bigger than asked; `
 ```text
 Sprite sheet: Ferro walking slowly forward while pooping, 4 frames. She keeps the hunched pooping posture from the poop row of the reference the whole time: back arched, hind legs bent low under the body, tail raised, head forward. Frame 1: front left paw and hind right paw step forward. Frame 2: legs passing under the body. Frame 3: front right paw and hind left paw step forward. Frame 4: legs passing under the body. Small steps; the body stays at the same low height in every frame and only the legs move. Below the row of frames, in a separate row, well apart from each other and from the frames, three small dog droppings of slightly different sizes, each smaller than the pile in the reference, in the same brown and outline style.
 ```
+
+## Message for sitting and looking at the viewer (the one that produced `sit.png`)
+
+Attached with `ferro-ref.png` and photos of the real Ferro for her face from the front. ChatGPT drew her bigger, with a bigger head, and the bodies in frames 3-6 are close but not identical; `build.py` scales by 9.0 and aligns on the front toes.
+
+```text
+Sprite sheet: Ferro stops running, sits down and turns her head to look at the viewer. 6 frames, left to right:
+1. Braking out of a run, still facing right: front legs stretched forward and planted, hind legs under the body, body leaning back.
+2. Sitting down: hindquarters lowering, hind legs folding, front legs straight.
+3. Sitting upright in side view facing right: front legs straight and together, hind legs folded under her, tail resting on the ground behind her, head in profile looking right.
+4. The same sitting body as frame 3, head turned three-quarters towards the viewer.
+5. The same sitting body, head facing the viewer straight on: both eyes and both erect ears visible, black nose in the centre, mouth closed.
+6. The same as frame 5, with the head tilted slightly to one side, the curious dog head tilt.
+
+Rules for this sheet:
+- In frames 3 to 6 the body, legs and tail are identical, pixel for pixel, in the same position. Only the head changes.
+- Same scale as the frames in the reference: standing, she is about 40 pixels from ear tips to paws. Sitting, she is taller and shorter, but her head is the same size as in the reference.
+- All 6 frames stand on the same ground line.
+- For her face seen from the front, use the attached photos of the real Ferro: pale wheaten face with a lighter, scruffy muzzle, dark round eyes with one white highlight pixel each, black nose, large erect pointed ears with warm orange-brown inside. Keep the coat pattern from the reference: grey-black saddle on the back, wheaten chest and legs.
+- Use only the colours from the palette in the reference.
+```

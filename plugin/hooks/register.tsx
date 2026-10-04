@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
 
-import type { FerroPhase } from '../types'
+import type { FerroPhase, RunVariant } from '../types'
 import { SCENE_MAX_WIDTH, SCENES } from './scene'
 
 // Ferro comes out only when a turn lasts longer than this, so short answers do not flash the band.
@@ -9,6 +9,8 @@ const RUN_AFTER_MS = 20_000
 // When Claude works for too long, Ferro lies down and falls asleep.
 const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
+// Each turn she either sits and looks at the viewer or poops; sitting comes more often (Vatra).
+const SIT_SHARE = 0.6
 // The real Ferro poops while walking and only rarely stops to poop in one spot.
 const STILL_POOP_SHARE = 0.2
 // In about a third of the turns she chases an orange ball.
@@ -17,8 +19,8 @@ const BALL_SHARE = 1 / 3
 const phase = atom({ plugin: 'mod-ferro', key: 'phase' } as const, null as FerroPhase)
 // This turn's background, an index into SCENES: picked at random on every turn.
 const scene = atom({ plugin: 'mod-ferro', key: 'scene' } as const, 0)
-// Whether this turn's run is the rare one where she poops in one spot, also picked per turn.
-const stillPoop = atom({ plugin: 'mod-ferro', key: 'stillPoop' } as const, false)
+// Which run this turn has: sitting, pooping while walking or pooping in one spot, picked per turn.
+const variant = atom({ plugin: 'mod-ferro', key: 'variant' } as const, 'run' as RunVariant)
 // Whether she chases the ball this turn, also picked per turn.
 const ball = atom({ plugin: 'mod-ferro', key: 'ball' } as const, false)
 
@@ -33,7 +35,9 @@ export const register: Register = on => {
     cancelTimers()
     await update($, phase, () => null)
     await update($, scene, () => Math.floor(Math.random() * SCENES.length))
-    await update($, stillPoop, () => Math.random() < STILL_POOP_SHARE)
+    await update($, variant, () =>
+      Math.random() < SIT_SHARE ? 'runSit' : Math.random() < STILL_POOP_SHARE ? 'runStill' : 'run',
+    )
     await update($, ball, () => Math.random() < BALL_SHARE)
     timers = [
       $.clock.after(RUN_AFTER_MS, () => void update($, phase, () => 'run')),
@@ -63,7 +67,7 @@ export const register: Register = on => {
 
     const { Box, Svg } = $.ui.resolve(e)
     const s = SCENES[await read($, scene)] ?? SCENES[0]
-    const r = (await read($, stillPoop)) ? s.runStill : s.run
+    const r = s[await read($, variant)]
     const withBall = await read($, ball)
     // the ball is a piece of SVG inserted into the plain scene
     const run = withBall ? r.svg.slice(0, r.ballAt) + r.ball + r.svg.slice(r.ballAt) : r.svg

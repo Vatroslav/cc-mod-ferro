@@ -87,7 +87,7 @@ test('the scenes of every background fit the Svg element limit', async () => {
   const { SCENES } = await import('./scene')
   expect(SCENES.length).toBeGreaterThan(0)
   for (const s of SCENES) {
-    for (const r of [s.run, s.runStill]) {
+    for (const r of [s.run, s.runStill, s.runSit]) {
       expect(r.svg.length + r.ball.length).toBeLessThanOrEqual(131072)
       expect(r.svg + r.ball).not.toContain('<image')
       // the ball goes in whole, inside the scene

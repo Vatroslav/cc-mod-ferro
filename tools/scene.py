@@ -539,11 +539,12 @@ def main() -> None:
         height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
         dog_x = VW // 2 - dog_w // 2 - 20
         dog_y = height - dog_h - 2
-        # running: pooping while walking is the usual scene, pooping in one spot the rare one;
-        # each comes plain and with the ball, which the mod inserts at `ballAt` when it wants it
+        # running: she sits and looks at the viewer, poops while walking, or (rarely) poops in one
+        # spot; each comes plain and with the ball, which the mod inserts at `ballAt` when it wants it
         prefix = "" if k == 0 else f"{name}-"
         runs = {}
-        for key, make, file in (("run", run_walk_scene, "run"), ("runStill", run_scene, "run-still")):
+        for key, make, file in (("run", run_walk_scene, "run"), ("runStill", run_scene, "run-still"),
+                                ("runSit", run_sit_scene, "sit")):
             plain, with_ball = make(meadow, dog_x, dog_y), make(meadow, dog_x, dog_y, ball=True)
             at = next(i for i, (a, b) in enumerate(zip(plain, with_ball)) if a != b)
             piece = with_ball[at : at + len(with_ball) - len(plain)]
@@ -552,12 +553,6 @@ def main() -> None:
             (preview / f"{prefix}{file}.svg").write_text(plain, encoding="utf-8")
             (preview / f"{prefix}ball-{file}.svg").write_text(with_ball, encoding="utf-8")
             print(name, key, len(plain), "with the ball", len(with_ball), "chars; limit 131072")
-        # sitting and looking at the viewer: preview only for now, starting after 3 s
-        if name in IN_MOD:
-            for file, ball in (("sit-preview.svg", False), ("ball-sit-preview.svg", True)):
-                sit = run_sit_scene(meadow, dog_x, dog_y, ball=ball, run_before=3.0)
-                (preview / f"{prefix}{file}").write_text(sit, encoding="utf-8")
-                print(name, file, len(sit), "chars (preview only)")
         sleep = sleep_scene(meadow, dog_x, dog_y)
         (preview / f"{prefix}sleep.svg").write_text(sleep, encoding="utf-8")
         print(name, "sleep", len(sleep), "chars", "" if name in IN_MOD else "(preview only, not in the mod)")
