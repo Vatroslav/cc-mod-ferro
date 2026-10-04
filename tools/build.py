@@ -19,9 +19,15 @@ SRC = ROOT / "assets" / "src"
 OUT = ROOT / "assets" / "px"
 PALETTE_FILE = ROOT / "assets" / "palette.json"
 
-# How many source pixels make one real pixel. The dog is drawn at a different size in each of
-# the three images, so the factor evens out the dog's height (run 240, the others ~220).
-FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55}
+# How many source pixels make one real pixel. The dog is drawn at a different size in each
+# image, so the factor evens out the dog's height from ear tip to ground (run ~240, poop and
+# sleep ~220, poop-walk ~236).
+FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8}
+# Sheets whose small figures are a row of droppings: each one is saved on its own as
+# <name>-drop-<i>.png. In poop.png the small figure is the pile next to the frame making it.
+# ChatGPT drew them bigger than asked (the largest as wide as a third of the dog), so they get
+# a larger factor of their own: the largest comes out 9 pixels wide, like the old pile.
+DROPPINGS = {"poop-walk": 10.5}
 PALETTE_SIZE = 22  # only for --new-palette; otherwise the number of fur colours in palette.json
 
 
@@ -351,16 +357,19 @@ def main() -> None:
         idx[bg] = transparent
 
         found = components(rgb, 400)
-        ground = max(box[0].stop for box, _ in found)  # the image's ground: the lowest figure
+        # the image's ground: the lowest dog (a row of droppings may sit lower)
+        ground = max(box[0].stop for box, _ in found if box[1].stop - box[1].start >= 20 * FACTOR[name])
         parts = []
         for box, own in found:
             crop = idx[box].copy()
             crop[~own] = transparent
-            px = downsample(crop, FACTOR[name], transparent)
+            is_dog = box[1].stop - box[1].start >= 20 * FACTOR[name]
+            factor = FACTOR[name] if is_dog or name not in DROPPINGS else DROPPINGS[name]
+            px = downsample(crop, factor, transparent)
             # the ear used for alignment is measured before cleaning, so frames stay where they were
             ear = ear_right(px, transparent) if px.shape[1] >= 20 else 0
             clean_edges(px, transparent, dark, {tongue_i, white_i}, outline)
-            catchlights(px, white[box] & own, FACTOR[name], white_i, dark)
+            catchlights(px, white[box] & own, factor, white_i, dark)
             solid = px != transparent
             out = np.zeros((*px.shape, 4), dtype=np.uint8)
             out[solid, :3] = palette[px[solid]]
@@ -379,6 +388,13 @@ def main() -> None:
             canvas.save(OUT / f"{name}-{len(dogs)}.png")
             dogs.append((box, x))
             print(name, len(dogs) - 1, "size", px.shape[1], "x", px.shape[0], "at", x, y)
+
+        if name in DROPPINGS:
+            drops = [img for _, px, _, img in parts if px.shape[1] < 20]
+            for i, img in enumerate(drops):
+                img.save(OUT / f"{name}-drop-{i}.png")
+                print(name, "drop", i, "size", img.width, "x", img.height)
+            continue
 
         # pile: position on the canvas of the dog right of it (the one making it)
         for box, px, _, img in parts:

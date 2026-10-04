@@ -221,6 +221,110 @@ def run_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
     return svg(body, defs, meadow, height)
 
 
+# Pooping while walking, the way the real Ferro does it (run_scene, pooping in one spot, is the
+# rare variant): run, crouch with frames 1-2 of poop.png, walk hunched while the ground moves
+# slowly and a dropping falls behind her now and then, stand up with frame 5 of poop.png, run.
+CROUCH = [(1, 0.3), (2, 0.3)]  # (poop frame, seconds)
+HUNCH_WALK_S = 7.0
+HUNCH_WALK_SPEED = 22  # px/s of the ground while she walks hunched
+HUNCH_FRAME_S = 0.2
+DROPS = [(0.8, 0), (2.5, 1), (4.2, 1), (5.9, 2)]  # (seconds into the walk, dropping sprite)
+REAR_X = 12  # x of her rear on the poop-walk canvas, where the droppings fall
+
+
+def at(points: list[tuple[float, float]], t: float) -> float:
+    """x of a piecewise linear path at second t."""
+    for (t0, x0), (t1, x1) in zip(points, points[1:]):
+        if t0 <= t <= t1:
+            return x1 if t1 == t0 else x0 + (x1 - x0) * (t - t0) / (t1 - t0)
+    return points[-1][1]
+
+
+def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN_BEFORE) -> str:
+    mw = meadow["width"]
+    crouch_start = run_before
+    walk_start = crouch_start + sum(s for _, s in CROUCH)
+    walk_end = walk_start + HUNCH_WALK_S
+    poop_end = walk_end + POOP[-1][1]
+    ground_total = GROUND_TILES * mw
+    d1 = run_before * RUN_SPEED
+    d2 = d1 + HUNCH_WALK_S * HUNCH_WALK_SPEED
+    d3 = d2 + WALK_AWAY_PX
+    period = poop_end + (ground_total - d3) / RUN_SPEED
+
+    # path of the ground: runs, stops while she crouches, walks slowly, steps away, runs
+    ground_pts = [(0, 0), (crouch_start, -d1), (walk_start, -d1), (walk_end, -d2),
+                  (poop_end, -d3), (period, -ground_total)]
+    back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
+    y_back = meadow["sky_h"]
+    y_ground = meadow["sky_h"] + meadow["back_h"]
+
+    walk_frames = sorted(PX.glob("poop-walk-[0-9].png"))
+    drop_sprites = sorted({k for _, k in DROPS})
+    defs = meadow_defs(meadow)
+    defs += [sprite_def(f"r{i}", f"run-{i}.png") for i in sorted(set(RUN_ORDER))]
+    defs += [sprite_def(f"p{i}", f"poop-{i}.png") for i in [i for i, _ in CROUCH] + [len(POOP) - 1]]
+    defs += [sprite_def(f"w{i}", f.name) for i, f in enumerate(walk_frames)]
+    defs += [sprite_def(f"d{k}", f"poop-walk-drop-{k}.png") for k in drop_sprites]
+
+    layers = (
+        clouds_layer(meadow)
+        + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
+        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
+    )
+
+    def cycle(prefix: str, frames: list, frame_s: float) -> str:
+        """Frames shown one after another in their own fast loop."""
+        out = ""
+        for slot, frame in enumerate(frames):
+            vals = ";".join("visible" if j == slot else "hidden" for j in range(len(frames)))
+            out += (
+                f'<use href="#{prefix}{frame}" visibility="hidden"><animate attributeName="visibility" '
+                f'values="{vals}" dur="{fmt(frame_s * len(frames))}s" calcMode="discrete" '
+                f'repeatCount="indefinite"/></use>'
+            )
+        return out
+
+    def shown(inner: str, start: float, end: float) -> str:
+        return (
+            "<g>" + discrete("display", ["none", "inline", "none"], [0, start, end], period)
+            + inner + "</g>"
+        )
+
+    run_group = (
+        "<g>"
+        + discrete("display", ["inline", "none", "inline"], [0, crouch_start, poop_end], period)
+        + cycle("r", RUN_ORDER, RUN_FRAME_S)
+        + "</g>"
+    )
+    dog = run_group
+    t = crouch_start
+    for i, s in CROUCH:
+        dog += shown(f'<use href="#p{i}"/>', t, t + s)
+        t += s
+    dog += shown(cycle("w", list(range(len(walk_frames))), HUNCH_FRAME_S), walk_start, walk_end)
+    dog += shown(f'<use href="#p{len(POOP) - 1}"/>', walk_end, poop_end)
+
+    # droppings lie on the meadow: each is placed where the ground is when it falls, then
+    # scrolls with the ground
+    canvas_h = size("poop-walk-0.png")[1]
+    drops = ""
+    for s, k in DROPS:
+        t_drop = walk_start + s
+        w, h = size(f"poop-walk-drop-{k}.png")
+        x = round(dog_x + REAR_X - w // 2 - at(ground_pts, t_drop))
+        drops += (
+            f'<use href="#d{k}" x="{x}" y="{dog_y + canvas_h - h}" display="none">'
+            + discrete("display", ["none", "inline"], [0, t_drop], period)
+            + "</use>"
+        )
+    drops_el = f"<g>{linear(ground_pts, period)}{drops}</g>"
+
+    height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
+    body = layers + drops_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
+    return svg(body, defs, meadow, height)
+
+
 def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
     mw = meadow["width"]
     breath_frames = list(dict.fromkeys(name for name, _ in BREATH))
@@ -298,6 +402,10 @@ def main() -> None:
         (preview / f"{prefix}sleep.svg").write_text(sleep, encoding="utf-8")
         print(name, "RUN", len(run), "chars; SLEEP", len(sleep), "chars; limit 131072",
               "" if name in IN_MOD else "(preview only, not in the mod)")
+        # pooping while walking: preview only for now, starting after 3 s instead of 16
+        walk = run_walk_scene(meadow, dog_x, dog_y, run_before=3.0)
+        (preview / f"{prefix}poop-walk.svg").write_text(walk, encoding="utf-8")
+        print(name, "POOP-WALK", len(walk), "chars (preview only)")
 
     ts = (
         "// Generated by tools/scene.py - do not edit by hand.\n"
