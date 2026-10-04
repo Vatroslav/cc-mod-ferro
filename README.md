@@ -1,35 +1,54 @@
 # mod-ferro
 
-<img src="preview/run.svg" width="100%" alt="Ferro, a pixel-art Norwich Terrier, running across a scrolling meadow">
+<img src="preview/ball-sit.svg" width="100%" alt="Ferro, a pixel-art Norwich Terrier, chasing an orange ball across a scrolling meadow, then sitting down to look at you">
 
-A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a turn for longer than 20 seconds, a band opens above the prompt and Ferro, a Norwich Terrier, runs across a pixel-art meadow:
+A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a turn for longer than 20 seconds, a band opens above the prompt and Ferro, a Norwich Terrier, runs across a pixel-art meadow. When the turn ends, the band disappears. Nothing is interactive, so there is nothing to miss when you are not looking.
 
-- each turn picks the summer or the autumn meadow at random (a winter meadow is built but switched off for now)
-- the meadow has three layers (clouds, hills with trees, grass) that scroll at different speeds
-- in about a third of the turns an orange ball bounces ahead of her and she chases it; when she stops to poop it rolls on and waits on the grass until she reaches it
-- 16 seconds into the run she either sits down and looks at you (60% of the turns: she brakes, sits, turns her head to you, blinks, tilts her head, then runs on) or poops the way the real Ferro does: hunched, walking slowly forward, leaving a row of droppings that scrolls away with the grass (now and then she stops and poops in one spot instead)
-- after 3 minutes Ferro lies down and falls asleep
+## What Ferro does
+
+Every turn picks a meadow, what Ferro does 16 seconds into the run, and whether she chases a ball, all at random. The scenes below loop the same way the band does, so each one shows its moment 16 seconds in.
+
+**Sits down and looks at you** (60% of the turns). She brakes, sits, turns her head to you, blinks, tilts her head, turns back and runs on.
+
+<img src="preview/sit.svg" width="100%" alt="Ferro sits down on the meadow and looks at you">
+
+**Poops while walking** (30% of the turns), the way the real Ferro does: hunched, walking slowly forward, leaving a row of droppings that scrolls away with the grass.
+
+<img src="preview/run.svg" width="100%" alt="Ferro poops while walking across the meadow">
+
+**Poops in one spot** (10% of the turns), the rare way.
+
+<img src="preview/autumn-run-still.svg" width="100%" alt="Ferro stops and poops in one spot on the autumn meadow">
+
+**Chases an orange ball** (a third of the turns, on top of the above). The ball bounces ahead of her; when she stops, it rolls on and waits on the grass until she reaches it, then pops up again.
+
+<img src="preview/autumn-ball-run.svg" width="100%" alt="Ferro chases an orange ball across the autumn meadow">
+
+**Falls asleep** after 3 minutes. She lies down and breathes, and z's rise above her head.
 
 <img src="preview/autumn-sleep.svg" width="100%" alt="Ferro asleep on the autumn meadow">
 
-<img src="preview/winter-run.svg" width="100%" alt="Ferro running across the winter meadow">
+**The meadow** is summer or autumn, in three layers (clouds, hills with trees, grass) that scroll at different speeds. A winter meadow is built but switched off for now.
 
-When the turn ends, the band disappears. Nothing is interactive, so there is nothing to miss when you are not looking.
+<img src="preview/winter-sit.svg" width="100%" alt="Ferro sits down on the winter meadow">
 
 ## How it is built
 
-**Art.** ChatGPT drew the frames (run, poop, sleep and sit as 6-frame strips, the hunched walk as a 4-frame strip with three droppings, all on a magenta background) and the three meadows. `tools/build.py` turns them into real pixel art: it cuts the frames, removes the magenta, snaps them to a true pixel grid, maps every pixel to a frozen 22-colour palette (`assets/palette.json`, plus reserved colours for the tongue and the eye highlight), cleans the outline and aligns all frames on the ear and the ground line. The sleeping breath and the blink while she sits are derived in code from one frame, so the pose never jumps. Each meadow is split into its three layers, and the clouds get their own small palette so their light-blue shading survives. Colours the meadow palette misses by far get extra slots, which keeps the brown trunks of the winter trees brown.
+**Art.** ChatGPT drew the frames (run, poop, sleep and sit as 6-frame strips, the hunched walk as a 4-frame strip with three droppings, all on a magenta background) and the three meadows. `tools/build.py` turns them into real pixel art: it cuts the frames, removes the magenta, snaps them to a true pixel grid, maps every pixel to a frozen 22-colour palette (`assets/palette.json`, plus reserved colours for the tongue and the eye highlight), cleans the outline, keeps one highlight in each eye and aligns the frames on the ground line and on the ear, or on the front paws where the head turns. ChatGPT drew some strips at a different scale than asked, so each strip has its own factor that gives Ferro the same head size everywhere. The sleeping breath and the blink while she sits are derived in code from one frame, so the pose never jumps. The orange ball is drawn in code. Each meadow is split into its three layers, and the clouds get their own small palette so their light-blue shading survives. Colours the meadow palette misses by far get extra slots, which keeps the brown trunks of the winter trees brown.
 
-<img src="assets/ref/ferro-ref.png" width="100%" alt="Reference sheet: Ferro standing and running, the palette and all frames">
+<img src="assets/ref/ferro-ref.png" width="100%" alt="Reference sheet for ChatGPT: Ferro standing and running, the palette and the run, sleep and poop frames">
 
-**Rendering.** The Desktop band can draw an `Svg` element, but it does not render `<image>` with PNG data, so every frame is converted to vector strokes: one `<path>` per colour, one stroke per horizontal run of pixels, defined once in `<defs>` and placed with `<use>`. All animation is SMIL inside the SVG, so the mod draws the scene once and the browser engine animates it. `tools/scene.py` builds both scenes for each meadow into `plugin/hooks/scene.ts` and `preview/`.
+The reference sheet above goes into every ChatGPT request for new frames, so new drawings keep the same Ferro. The instructions and the prompts that produced each strip are in `assets/ref/chatgpt-project.md`.
+
+**Rendering.** The Desktop band can draw an `Svg` element, but it does not render `<image>` with PNG data, so every frame is converted to vector strokes: one `<path>` per colour, one stroke per horizontal run of pixels, defined once in `<defs>` and placed with `<use>`. All animation is SMIL inside the SVG, so the mod draws the scene once and the browser engine animates it. `tools/scene.py` builds the three running scenes and the sleeping scene for each meadow into `plugin/hooks/scene.ts` and `preview/`.
 
 **Constraints that shaped it.**
-- The `Svg` element accepts at most 131,072 characters. On the summer and autumn meadows the running scenes are about 118k (pooping while walking), 114k (sitting) and 110k (pooping in one spot), and the sleeping scene about 85k; the ball adds about 6k, and the more detailed winter meadow about 7k. The ball is a separate piece of SVG the mod inserts into the plain scene, so the scenes are not stored twice.
+- The `Svg` element accepts at most 131,072 characters. On the summer and autumn meadows the running scenes are about 118k (pooping while walking), 114k (sitting) and 110k (pooping in one spot), and the sleeping scene about 85k; the ball adds about 6k, and the more detailed winter meadow about 7k. That is why sitting is a scene of its own instead of an extra moment in a running scene.
+- The ball is a separate piece of SVG the mod inserts into the plain scene, so no scene is stored twice.
 - The loop is seamless: in one loop the ground travels exactly 20 meadow widths and the hills, at 0.35 of the ground speed, exactly 7.
 - ChatGPT returned the gallop frames out of phase order, which made Ferro look like she was running backwards. The real order is `[4, 3, 2, 5, 0]`.
 
-**The mod.** `plugin/hooks/register.tsx` starts two timers on `turn.start` (20 s to run, 3 min to sleep), clears them on the main turn's `turn.complete`, keeps the phase in `$.state` and draws the band with a `ui.render` hook on `AbovePrompt`, only on the desktop surface.
+**The mod.** `plugin/hooks/register.tsx` starts two timers on `turn.start` (20 s to run, 3 min to sleep) and picks the turn's meadow, running scene (60-30-10) and ball (one in three), keeping all of it in `$.state`. The timers are cleared on the main turn's `turn.complete`. The band is drawn with a `ui.render` hook on `AbovePrompt`, only on the desktop surface.
 
 ## Install
 
