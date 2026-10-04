@@ -4,7 +4,7 @@
 
 A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a turn for longer than 20 seconds, a band opens above the prompt and Ferro, a Norwich Terrier, runs across a pixel-art meadow:
 
-- each turn picks one of three meadows at random: summer, autumn or winter
+- each turn picks the summer or the autumn meadow at random (a winter meadow is built but switched off for now)
 - the meadow has three layers (clouds, hills with trees, grass) that scroll at different speeds
 - roughly every 40 seconds Ferro stops to poop, and the pile scrolls away with the grass
 - after 3 minutes Ferro lies down and falls asleep
