@@ -133,33 +133,57 @@ MEADOW_COLORS = 48
 CLOUD_COLORS = 2  # white and the light-blue shading, on top of the sky colour
 # Backgrounds: assets/src/<name>.png -> assets/px/<name>-clouds/back/ground.png and <name>.json.
 # The mod picks one at random on every turn.
-BACKGROUNDS = ["meadow", "autumn"]
+BACKGROUNDS = ["meadow", "autumn", "winter"]
+# Extra colours for a background whose rare colours median cut loses: in the winter meadow
+# the brown trunks and twigs (under 1% of the pixels) turned near black.
+EXTRA_COLORS = {"winter": 4}
 SKY_H = 20  # rows of sky above the hills in the band
 GROUND_H = 27  # rows of grass below the bushes in the band
 
 
 def meadow(name: str) -> dict:
     """Background in three layers: clouds (moved into a low sky), hills with trees, grass."""
-    q = Image.open(SRC / f"{name}.png").convert("RGB").quantize(
-        MEADOW_COLORS, method=Image.Quantize.MEDIANCUT
-    )
+    img = Image.open(SRC / f"{name}.png").convert("RGB")
+    q = img.quantize(MEADOW_COLORS, method=Image.Quantize.MEDIANCUT)
     pal = np.array(q.getpalette()[: MEADOW_COLORS * 3]).reshape(-1, 3)
+    if EXTRA_COLORS.get(name):
+        # colours the palette misses by far (more than 60 in the sum of channel differences)
+        # get their own, and every pixel is mapped to the nearest colour of the larger palette
+        flat = np.asarray(img).reshape(-1, 3).astype(int)
+        missed = flat[np.abs(flat - pal[np.asarray(q).ravel()]).sum(1) > 60]
+        extra = Image.fromarray(missed.reshape(1, -1, 3).astype(np.uint8)).quantize(
+            EXTRA_COLORS[name], method=Image.Quantize.MEDIANCUT, kmeans=10
+        )
+        pal = np.vstack([pal, np.array(extra.getpalette()[: EXTRA_COLORS[name] * 3]).reshape(-1, 3)])
+        pal_img = Image.new("P", (1, 1))
+        pal_img.putpalette([int(c) for c in pal.ravel()] + [int(c) for c in pal[0]] * (256 - len(pal)))
+        q = img.quantize(palette=pal_img, dither=Image.Dither.NONE)
     idx = np.asarray(q).astype(np.int16)
-    px = downsample_rect(idx, MEADOW_FX, MEADOW_FY, MEADOW_COLORS)
+    px = downsample_rect(idx, MEADOW_FX, MEADOW_FY, len(pal))
     rgb = pal[px].astype(np.uint8)
     h, w, _ = rgb.shape
 
     vals, counts = np.unique(rgb[2].reshape(-1, 3), axis=0, return_counts=True)
     sky = vals[counts.argmax()]
     not_sky = np.abs(rgb.astype(int) - sky).sum(2) > 30
-    white = rgb.astype(int).min(2) > 190
 
-    # top of the hills: first row where at least a third is neither sky nor cloud
-    hills_top = int(np.argmax((not_sky & ~white).mean(1) > 0.3)) - 3
-    # top of the grass: row below the bushes with the most light green
+    # top of the hills: the block of rows that are at least a third not sky and run unbroken
+    # down to the bottom, plus 3 rows for the peaks. Cloud rows sit above a gap of clear sky.
+    # White counts as not sky, because snowy hills are white too.
+    solid_rows = not_sky.mean(1) > 0.3
+    hills_top = h
+    while hills_top > 0 and solid_rows[hills_top - 1]:
+        hills_top -= 1
+    hills_top -= 3
+    # top of the grass: row below the bushes with the most light green. A ground that is not
+    # green (snow) starts on the row after the dark line under the bushes.
     g = rgb.astype(int)
     light_grass = (g[..., 1] > 170) & (g[..., 0] > 90) & (g[..., 2] < 90)
-    grass_top = hills_top + 20 + int(np.argmax(light_grass[hills_top + 20 :].mean(1) > 0.6))
+    green_rows = light_grass[hills_top + 20 :].mean(1) > 0.6
+    if green_rows.any():
+        grass_top = hills_top + 20 + int(np.argmax(green_rows))
+    else:
+        grass_top = hills_top + 21 + int(g[hills_top + 20 : hills_top + 40].sum(2).mean(1).argmin())
 
     def rgba(part: np.ndarray, mask: np.ndarray) -> Image.Image:
         out = np.zeros((*part.shape[:2], 4), dtype=np.uint8)

@@ -47,7 +47,7 @@ test('after 20 s Ferro runs, after 3 min she sleeps, on the same background', as
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(20_000)
   const run = (await band($)).svg?.props.alt
-  expect(run).toMatch(/^Ferro running across the (autumn )?meadow$/)
+  expect(run).toMatch(/^Ferro running across the (autumn |winter )?meadow$/)
   await clock.advance(160_000)
   const sleep = (await band($)).svg?.props.alt
   expect(sleep).toBe(run.replace('running across', 'asleep on'))

@@ -49,7 +49,7 @@ BREATH = [("sleep-5", 1.8), ("sleep-breath-1", 1.2)]
 # Backgrounds from build.py (name: where Ferro is, for the alt text). The mod picks one at
 # random on every turn. The first one is previewed in preview/run.svg and sleep.svg, the
 # others in preview/<name>-run.svg and <name>-sleep.svg.
-BACKGROUNDS = {"meadow": "the meadow", "autumn": "the autumn meadow"}
+BACKGROUNDS = {"meadow": "the meadow", "autumn": "the autumn meadow", "winter": "the winter meadow"}
 
 Z_GLYPH = ["####", "..#.", ".#..", "####"]
 
