@@ -1,4 +1,4 @@
-# mod-ferro
+# cc-mod-ferro
 
 <img src="preview/ball-sit.svg" width="100%" alt="Ferro, a pixel-art Norwich Terrier, chasing an orange ball across a scrolling meadow, then sitting down to look at you">
 
@@ -54,7 +54,7 @@ The reference sheet above goes into every ChatGPT request for new frames, so new
 
 ```bash
 claude plugin marketplace add <path-to-this-repo>
-claude plugin install mod-ferro@mod-ferro --scope user
+claude plugin install cc-mod-ferro@cc-mod-ferro --scope user
 ```
 
 Function hooks of installed plugins may need `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the `env` block of `~/.claude/settings.json`. It works only in the Code tab of Claude Desktop, because the terminal has no `Svg` element.

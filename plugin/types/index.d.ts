@@ -5,6 +5,6 @@ export type RunVariant = 'run' | 'runStill' | 'runSit'
 
 declare module 'claude-code' {
   interface PluginState {
-    'mod-ferro': { phase: FerroPhase; scene: number; variant: RunVariant; ball: boolean }
+    'cc-mod-ferro': { phase: FerroPhase; scene: number; variant: RunVariant; ball: boolean }
   }
 }

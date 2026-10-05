@@ -1,9 +1,9 @@
 {
-  "name": "mod-ferro",
+  "name": "cc-mod-ferro",
   "owner": { "name": "Vatroslav Mileusnić" },
   "plugins": [
     {
-      "name": "mod-ferro",
+      "name": "cc-mod-ferro",
       "source": "./plugin",
       "description": "Ferro runs across a pixel-art meadow above the prompt while Claude works on a long turn"
     }

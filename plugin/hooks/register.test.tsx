@@ -4,7 +4,7 @@ import { expect, mock, test } from 'claude-code/testing'
 // the test's "Claude Code", which draws the band as <Text>engine</Text>, so it shows when the mod
 // does not take the band over.
 
-const PLUGIN = 'mod-ferro'
+const PLUGIN = 'cc-mod-ferro'
 
 function props(bodyColumns = 94, isWorking = true) {
   return { hasSurvey: false, isWorking, maxRows: 10, bodyColumns, scroll: { offset: 0, bodyRows: 10 }, view: {} }

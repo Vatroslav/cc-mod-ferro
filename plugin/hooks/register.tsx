@@ -16,13 +16,13 @@ const WALK_POOP_SHARE = 0.3
 // In about a third of the turns she chases an orange ball.
 const BALL_SHARE = 1 / 3
 
-const phase = atom({ plugin: 'mod-ferro', key: 'phase' } as const, null as FerroPhase)
+const phase = atom({ plugin: 'cc-mod-ferro', key: 'phase' } as const, null as FerroPhase)
 // This turn's background, an index into SCENES: picked at random on every turn.
-const scene = atom({ plugin: 'mod-ferro', key: 'scene' } as const, 0)
+const scene = atom({ plugin: 'cc-mod-ferro', key: 'scene' } as const, 0)
 // Which run this turn has: sitting, pooping while walking or pooping in one spot, picked per turn.
-const variant = atom({ plugin: 'mod-ferro', key: 'variant' } as const, 'run' as RunVariant)
+const variant = atom({ plugin: 'cc-mod-ferro', key: 'variant' } as const, 'run' as RunVariant)
 // Whether she chases the ball this turn, also picked per turn.
-const ball = atom({ plugin: 'mod-ferro', key: 'ball' } as const, false)
+const ball = atom({ plugin: 'cc-mod-ferro', key: 'ball' } as const, false)
 
 export const register: Register = on => {
   let timers: Timer[] = []
