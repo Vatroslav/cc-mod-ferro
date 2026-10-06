@@ -40,9 +40,9 @@ Every turn picks a meadow, what Ferro does 16 seconds into the run, and whether 
 
 The reference sheet above goes into every ChatGPT request for new frames, so new drawings keep the same Ferro. The instructions and the prompts that produced each strip are in `assets/ref/chatgpt-project.md`.
 
-**Rendering.** The Desktop band can draw an `Svg` element, but it does not render `<image>` with PNG data, so every frame is converted to vector strokes: one `<path>` per colour, one stroke per horizontal run of pixels, defined once in `<defs>` and placed with `<use>`. All animation is SMIL inside the SVG, so the mod draws the scene once and the browser engine animates it. `tools/scene.py` builds the three running scenes and the sleeping scene for each meadow into `plugin/hooks/scene.ts` and `preview/`.
+**Rendering.** The Desktop band can draw an `Svg` element, but in the sandboxed frame the mod draws it in (`isInteractive`) it does not render `<image>` with PNG data, so every frame is converted to vector strokes: one `<path>` per colour, one stroke per horizontal run of pixels, defined once in `<defs>` and placed with `<use>`. All animation is SMIL inside the SVG, so the mod draws the scene once and the browser engine animates it. `tools/scene.py` builds the three running scenes and the sleeping scene for each meadow into `plugin/hooks/scene.ts` and `preview/`.
 
-**Constraints that shaped it.**
+**Constraints that shaped it.** The facts about Claude Code and the Desktop band behind them, with the build and the date they were last checked, are in [`docs/desktop-band.md`](docs/desktop-band.md).
 - The `Svg` element accepts at most 131,072 characters. On the summer and autumn meadows the running scenes are about 118k (pooping while walking), 114k (sitting) and 110k (pooping in one spot), and the sleeping scene about 85k; the ball adds about 6k, and the more detailed winter meadow about 7k. That is why sitting is a scene of its own instead of an extra moment in a running scene.
 - The ball is a separate piece of SVG the mod inserts into the plain scene, so no scene is stored twice.
 - The loop is seamless: in one loop the ground travels exactly 20 meadow widths and the hills, at 0.35 of the ground speed, exactly 7.
@@ -57,6 +57,6 @@ claude plugin marketplace add <path-to-this-repo>
 claude plugin install cc-mod-ferro@cc-mod-ferro --scope user
 ```
 
-Function hooks of installed plugins may need `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the `env` block of `~/.claude/settings.json`. It works only in the Code tab of Claude Desktop, because the terminal has no `Svg` element.
+Function hooks of installed plugins may need `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` in the `env` block of `~/.claude/settings.json`. It works only in the Code tab of Claude Desktop: the band above the prompt exists only there and in the terminal, and the terminal has no `Svg` element.
 
 Check and test: `claude plugin validate ./plugin` and `claude plugin test ./plugin`.
