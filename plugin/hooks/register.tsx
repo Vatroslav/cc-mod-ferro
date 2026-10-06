@@ -9,17 +9,19 @@ const RUN_AFTER_MS = 20_000
 // When Claude works for too long, Ferro lies down and falls asleep.
 const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
-// Each turn she sits and looks at the viewer, poops while walking, or poops in one spot
-// (Vatra: 60-30-10). The real Ferro rarely stops to poop in one spot.
-const SIT_SHARE = 0.6
-const WALK_POOP_SHARE = 0.3
+// Each turn she sits and looks at the viewer, sniffs a spot, poops while walking, or poops in one
+// spot: 50-20-20-10 since sniffing came in (it was 60-30-10). The real Ferro rarely stops to poop
+// in one spot.
+const SIT_SHARE = 0.5
+const SNIFF_SHARE = 0.2
+const WALK_POOP_SHARE = 0.2
 // In about a third of the turns she chases an orange ball.
 const BALL_SHARE = 1 / 3
 
 const phase = atom({ plugin: 'cc-mod-ferro', key: 'phase' } as const, null as FerroPhase)
 // This turn's background, an index into SCENES: picked at random on every turn.
 const scene = atom({ plugin: 'cc-mod-ferro', key: 'scene' } as const, 0)
-// Which run this turn has: sitting, pooping while walking or pooping in one spot, picked per turn.
+// Which run this turn has: sitting, sniffing, pooping while walking or pooping in one spot, picked per turn.
 const variant = atom({ plugin: 'cc-mod-ferro', key: 'variant' } as const, 'run' as RunVariant)
 // Whether she chases the ball this turn, also picked per turn.
 const ball = atom({ plugin: 'cc-mod-ferro', key: 'ball' } as const, false)
@@ -37,7 +39,9 @@ export const register: Register = on => {
     await update($, scene, () => Math.floor(Math.random() * SCENES.length))
     await update($, variant, () => {
       const r = Math.random()
-      return r < SIT_SHARE ? 'runSit' : r < SIT_SHARE + WALK_POOP_SHARE ? 'run' : 'runStill'
+      if (r < SIT_SHARE) return 'runSit'
+      if (r < SIT_SHARE + SNIFF_SHARE) return 'runSniff'
+      return r < SIT_SHARE + SNIFF_SHARE + WALK_POOP_SHARE ? 'run' : 'runStill'
     })
     await update($, ball, () => Math.random() < BALL_SHARE)
     timers = [

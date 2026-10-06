@@ -8,11 +8,15 @@ A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a tur
 
 Every turn picks a meadow, what Ferro does 16 seconds into the run, and whether she chases a ball, all at random. The scenes below loop the same way the band does, so each one shows its moment 16 seconds in.
 
-**Sits down and looks at you** (60% of the turns). She brakes, sits, turns her head to you, blinks, tilts her head, turns back and runs on.
+**Sits down and looks at you** (50% of the turns). She brakes, sits, turns her head to you, blinks, tilts her head, turns back and runs on.
 
 <img src="preview/sit.svg" width="100%" alt="Ferro sits down on the meadow and looks at you">
 
-**Poops while walking** (30% of the turns), the way the real Ferro does: hunched, walking slowly forward, leaving a row of droppings that scrolls away with the grass.
+**Sniffs a spot** (20% of the turns). She slows down with her head lowering, pushes her nose into the grass a few times, lifts her head and runs on.
+
+<img src="preview/sniff.svg" width="100%" alt="Ferro stops and sniffs a spot on the meadow">
+
+**Poops while walking** (20% of the turns), the way the real Ferro does: hunched, walking slowly forward, leaving a row of droppings that scrolls away with the grass.
 
 <img src="preview/run.svg" width="100%" alt="Ferro poops while walking across the meadow">
 
@@ -40,15 +44,15 @@ Every turn picks a meadow, what Ferro does 16 seconds into the run, and whether 
 
 The reference sheet above goes into every ChatGPT request for new frames, so new drawings keep the same Ferro. The instructions and the prompts that produced each strip are in `assets/ref/chatgpt-project.md`.
 
-**Rendering.** The Desktop band can draw an `Svg` element. Every frame and background layer is a small indexed-colour PNG in an `<image>` (data URI), defined once in `<defs>` and placed with `<use>`; `image-rendering="pixelated"` keeps the pixels sharp at 2x. The band renders `<image>` only when the `Svg` is drawn as an image, not in the sandboxed frame (`isInteractive`), so the mod draws it as an image. Until version 0.7.2 every frame was converted to vector strokes (one `<path>` per colour, one stroke per horizontal run of pixels), about six times the size. All animation is SMIL inside the SVG, so the mod draws the scene once and the browser engine animates it. `tools/scene.py` builds the three running scenes and the sleeping scene for each meadow into `plugin/hooks/scene.ts` and `preview/`.
+**Rendering.** The Desktop band can draw an `Svg` element. Every frame and background layer is a small indexed-colour PNG in an `<image>` (data URI), defined once in `<defs>` and placed with `<use>`; `image-rendering="pixelated"` keeps the pixels sharp at 2x. The band renders `<image>` only when the `Svg` is drawn as an image, not in the sandboxed frame (`isInteractive`), so the mod draws it as an image. Until version 0.7.2 every frame was converted to vector strokes (one `<path>` per colour, one stroke per horizontal run of pixels), about six times the size. All animation is SMIL inside the SVG, so the mod draws the scene once and the browser engine animates it. `tools/scene.py` builds the four running scenes and the sleeping scene for each meadow into `plugin/hooks/scene.ts` and `preview/`.
 
 **Constraints that shaped it.** The facts about Claude Code and the Desktop band behind them, with the build and the date they were last checked, are in [`docs/desktop-band.md`](docs/desktop-band.md).
-- The `Svg` element accepts at most 131,072 characters. On the summer and autumn meadows the running scenes are about 26.5k (pooping while walking), 25k (sitting) and 24k (pooping in one spot), and the sleeping scene about 18k; the ball adds about 5.7k. As vector strokes they were about 118k, 114k, 110k and 85k, and winter with the ball came within 117 characters of the limit. That is why sitting is a scene of its own instead of an extra moment in a running scene.
+- The `Svg` element accepts at most 131,072 characters. On the summer and autumn meadows the running scenes are about 26.5k (pooping while walking), 25k (sitting), 24k (pooping in one spot) and 19k (sniffing), and the sleeping scene about 18k; the ball adds about 5.7k. As vector strokes they were about 118k, 114k, 110k and 85k, and winter with the ball came within 117 characters of the limit. That is why sitting is a scene of its own instead of an extra moment in a running scene.
 - The ball is a separate piece of SVG the mod inserts into the plain scene, so no scene is stored twice.
 - The loop is seamless: in one loop the ground travels exactly 20 meadow widths and the hills, at 0.35 of the ground speed, exactly 7.
 - ChatGPT returned the gallop frames out of phase order, which made Ferro look like she was running backwards. The real order is `[4, 3, 2, 5, 0]`.
 
-**The mod.** `plugin/hooks/register.tsx` starts two timers on `turn.start` (20 s to run, 3 min to sleep) and picks the turn's meadow, running scene (60-30-10) and ball (one in three), keeping all of it in `$.state`. The timers are cleared on the main turn's `turn.complete`. The band is drawn with a `ui.render` hook on `AbovePrompt`, only on the desktop surface. Ferro is only a pastime, so she gives the band up to any other mod that has something to show there (the files a delete prompt is about, for one): the hook asks the plugins beneath first and draws only when the band would otherwise be empty.
+**The mod.** `plugin/hooks/register.tsx` starts two timers on `turn.start` (20 s to run, 3 min to sleep) and picks the turn's meadow, running scene (50-20-20-10) and ball (one in three), keeping all of it in `$.state`. The timers are cleared on the main turn's `turn.complete`. The band is drawn with a `ui.render` hook on `AbovePrompt`, only on the desktop surface. Ferro is only a pastime, so she gives the band up to any other mod that has something to show there (the files a delete prompt is about, for one): the hook asks the plugins beneath first and draws only when the band would otherwise be empty.
 
 ## Install
 
