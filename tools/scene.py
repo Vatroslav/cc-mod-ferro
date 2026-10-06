@@ -460,26 +460,32 @@ def run_sit_scene(meadow: dict, dog_x: int, dog_y: int, ball: bool = False,
     return svg(body, defs, meadow, height)
 
 
-# Sniffing, a turn of its own: run, slow down with the head lowering (sniff-0), then a few times
-# in a row: walk with the nose to the grass (sniff-1 to 4) and stop to sniff one spot, the head
-# bobbing between the nose on the grass (sniff-5) and one pixel higher (sniff-up); lift the head
-# (sniff-0 again) and run. How many stops (1 to SNIFF_MAX_STOPS) the mod picks per turn, so each
-# count is a scene of its own. Each stop has its own walk and number of bobs, so they differ.
+# Sniffing, a turn of its own: a few times in a row she slows down with the head lowering
+# (sniff-0), sniffs one spot with the head bobbing between the nose on the grass (sniff-5) and one
+# pixel higher (sniff-up), lifts her head (sniff-0 again) and dashes on to the next spot; after the
+# last one she runs on. How many spots (1 to SNIFF_MAX_STOPS) the mod picks per turn, so each count
+# is a scene of its own. Each spot has its own number of bobs and dash, so they differ. The walk
+# with the nose down (sniff-1 to 4) is not used: no drawing of it looked right (6.10.2026).
 SNIFF_MAX_STOPS = 5
 SNIFF_TURN = (0.35, 12)  # (seconds, px of ground) of sniff-0, when she slows down and when she lifts her head
-SNIFF_WALK_SPEED = 20  # px/s of the ground while she walks with her nose down
-SNIFF_FRAME_S = 0.22
-SNIFF_WALKS = [1.8, 1.2, 2.2, 1.0, 1.5]  # seconds of walking before each stop
-SNIFF_BOBS = [3, 2, 4, 2, 3]  # head bobs at each stop
+SNIFF_BOBS = [3, 2, 4, 2, 3]  # head bobs at each spot
+SNIFF_DASHES = [1.2, 0.8, 1.5, 1.0]  # seconds of running from one spot to the next
 SNIFF_DOWN_S, SNIFF_UP_S, SNIFF_LAST_S = 0.32, 0.14, 0.4  # nose on the grass, head up, last sniff
 
 
 def windows(times: list[tuple[float, float]], period: float) -> str:
-    """display="inline" only within the given (start, end) windows of the loop."""
+    """display="inline" only within the given (start, end) windows of the loop; a window may
+    start at 0 or end at the end of the loop."""
     vals, keys = ["none"], [0.0]
     for a, b in times:
-        vals += ["inline", "none"]
-        keys += [a, b]
+        if a == 0:
+            vals[-1] = "inline"
+        else:
+            vals.append("inline")
+            keys.append(a)
+        if b < period:
+            vals.append("none")
+            keys.append(b)
     return discrete("display", vals, keys, period)
 
 
@@ -489,15 +495,17 @@ def run_sniff_scene(meadow: dict, dog_x: int, dog_y: int, stops: int, ball: bool
     turn_s, turn_px = SNIFF_TURN
     ground_total = GROUND_TILES * mw
 
-    # the timeline: (what, start, end) and the path of the ground through it
+    # the timeline: windows of each frame and the path of the ground through them
     t, d = run_before, run_before * RUN_SPEED
     ground_pts = [(0, 0), (t, -d)]
-    turns, walks, downs, ups = [(t, t + turn_s)], [], [], []
-    t, d = t + turn_s, d + turn_px
-    ground_pts.append((t, -d))
+    runs, turns, downs, ups = [(0, t)], [], [], []
     for k in range(stops):
-        walks.append((t, t + SNIFF_WALKS[k]))
-        t, d = t + SNIFF_WALKS[k], d + SNIFF_WALKS[k] * SNIFF_WALK_SPEED
+        if k > 0:  # dash on to the next spot
+            runs.append((t, t + SNIFF_DASHES[k - 1]))
+            t, d = t + SNIFF_DASHES[k - 1], d + SNIFF_DASHES[k - 1] * RUN_SPEED
+            ground_pts.append((t, -d))
+        turns.append((t, t + turn_s))  # slows down, the head going down
+        t, d = t + turn_s, d + turn_px
         ground_pts.append((t, -d))
         for _ in range(SNIFF_BOBS[k]):
             downs.append((t, t + SNIFF_DOWN_S))
@@ -506,11 +514,12 @@ def run_sniff_scene(meadow: dict, dog_x: int, dog_y: int, stops: int, ball: bool
         downs.append((t, t + SNIFF_LAST_S))
         t += SNIFF_LAST_S
         ground_pts.append((t, -d))
-    turns.append((t, t + turn_s))
-    t, d = t + turn_s, d + turn_px
-    ground_pts.append((t, -d))
+        turns.append((t, t + turn_s))  # lifts the head and moves off
+        t, d = t + turn_s, d + turn_px
+        ground_pts.append((t, -d))
     sniff_start, sniff_end = run_before, t
     period = sniff_end + (ground_total - d) / RUN_SPEED
+    runs.append((sniff_end, period))
     ground_pts.append((period, -ground_total))
     back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
     y_back = meadow["sky_h"]
@@ -518,7 +527,7 @@ def run_sniff_scene(meadow: dict, dog_x: int, dog_y: int, stops: int, ball: bool
 
     defs = meadow_defs(meadow)
     defs += [sprite_def(f"r{i}", f"run-{i}.png") for i in sorted(set(RUN_ORDER))]
-    defs += [sprite_def(f"n{i}", f"sniff-{i}.png") for i in range(6)]
+    defs += [sprite_def(f"n{i}", f"sniff-{i}.png") for i in (0, 5)]
     defs += [sprite_def("nu", "sniff-up.png")]
 
     layers = (
@@ -526,14 +535,8 @@ def run_sniff_scene(meadow: dict, dog_x: int, dog_y: int, stops: int, ball: bool
         + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
         + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
     )
-    dog = (
-        "<g>"
-        + discrete("display", ["inline", "none", "inline"], [0, sniff_start, sniff_end], period)
-        + cycle("r", RUN_ORDER, RUN_FRAME_S)
-        + "</g>"
-    )
+    dog = f'<g>{windows(runs, period)}{cycle("r", RUN_ORDER, RUN_FRAME_S)}</g>'
     dog += f'<g display="none">{windows(turns, period)}<use href="#n0"/></g>'
-    dog += f'<g display="none">{windows(walks, period)}{cycle("n", [1, 2, 3, 4], SNIFF_FRAME_S)}</g>'
     dog += f'<g display="none">{windows(downs, period)}<use href="#n5"/></g>'
     dog += f'<g display="none">{windows(ups, period)}<use href="#nu"/></g>'
 
