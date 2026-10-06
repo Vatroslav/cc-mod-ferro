@@ -5,17 +5,18 @@
   then to poop, and the pile stays on the meadow and scrolls away to the left.
 - SLEEP: Ferro lies down and falls asleep, the clouds keep drifting, z's rise above her head.
 
-The Desktop band does not render <image> with a PNG (data URI), but it does render <use>. So
-every drawing is converted to vector strokes (one <path> per colour) inside <defs>, and the
-scene places it with <use>. Everything is animated with SMIL.
+Every drawing is a PNG (data URI) in an <image> inside <defs>, and the scene places it with
+<use>. The Desktop band renders <image> only when the mod draws the Svg as an image (without
+isInteractive). Everything is animated with SMIL, which the image mode animates too.
 Run (from the repo root, after tools/build.py): python tools/scene.py
 """
 
+import base64
+import io
 import json
 import math
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -67,30 +68,18 @@ def size(name: str) -> tuple[int, int]:
 
 
 def sprite_def(id_: str, name: str) -> str:
-    """PNG as a <g> with one path per colour: every horizontal run of pixels is a stroke of width 1."""
-    a = np.asarray(Image.open(PX / name).convert("RGBA"))
-    by_color: dict[str, list[str]] = {}
-    for y in range(a.shape[0]):
-        row = a[y]
-        x = 0
-        last_end: dict[str, int] = {}
-        while x < a.shape[1]:
-            if row[x, 3] < 128:
-                x += 1
-                continue
-            color = "#%02x%02x%02x" % tuple(int(c) for c in row[x, :3])
-            end = x + 1
-            while end < a.shape[1] and row[end, 3] >= 128 and (row[end, :3] == row[x, :3]).all():
-                end += 1
-            parts = by_color.setdefault(color, [])
-            if color in last_end:
-                parts.append(f"m{x - last_end[color]} 0h{end - x}")
-            else:
-                parts.append(f"M{x} {y}.5h{end - x}")
-            last_end[color] = end
-            x = end
-    paths = "".join(f'<path stroke="{c}" d="{"".join(p)}"/>' for c, p in by_color.items())
-    return f'<g id="{id_}" fill="none" stroke-width="1">{paths}</g>'
+    """PNG as an <image> with an indexed-colour PNG in a data URI: about a sixth of the size of
+    vector strokes (one path per colour), which the scenes used until 6.10.2026."""
+    im = Image.open(PX / name).convert("RGBA")
+    colors = sorted(set(im.getdata()))
+    index = {c: i for i, c in enumerate(colors)}
+    indexed = Image.new("P", im.size)
+    indexed.putdata([index[c] for c in im.getdata()])
+    indexed.putpalette([v for c in colors for v in c[:3]])
+    buf = io.BytesIO()
+    indexed.save(buf, "PNG", optimize=True, transparency=bytes(c[3] for c in colors))
+    data = base64.b64encode(buf.getvalue()).decode()
+    return f'<image id="{id_}" width="{im.width}" height="{im.height}" href="data:image/png;base64,{data}"/>'
 
 
 def linear(points: list[tuple[float, float]], period: float, y: int = 0, repeat: bool = True) -> str:
@@ -138,7 +127,7 @@ def svg(body: str, defs: list[str], meadow: dict, height: int) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{VW * SCALE}" height="{height * SCALE}" '
         f'viewBox="0 0 {VW} {height}" preserveAspectRatio="xMidYMid slice" '
-        f'shape-rendering="crispEdges">'
+        f'shape-rendering="crispEdges" image-rendering="pixelated" style="image-rendering:pixelated">'
         f'<rect width="{VW}" height="{height}" fill="{meadow["sky"]}"/>'
         f'<defs>{"".join(defs)}</defs>{body}</svg>'
     )

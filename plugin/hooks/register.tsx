@@ -86,6 +86,8 @@ export const register: Register = on => {
     // is cropped at the sides and the pixels keep their size.
     const width = Math.min(SCENE_MAX_WIDTH, Math.max(300, e.props.bodyColumns * PX_PER_COLUMN - 8))
 
+    // Drawn as an image (no isInteractive): only then does the band render the PNG frames, and
+    // SMIL animates there too.
     return (
       <Box>
         <Svg
@@ -93,7 +95,6 @@ export const register: Register = on => {
           alt={now === 'sleep' ? `Ferro asleep on ${s.place}` : runAlt}
           width={width}
           height={s.height}
-          isInteractive
         />
       </Box>
     )

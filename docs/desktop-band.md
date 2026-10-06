@@ -26,10 +26,11 @@ every few days, so check again when the mod misbehaves after an update.
 - Every remote surface draws it: Desktop, the mobile app and VS Code. The terminal has no `Svg`.
 - `source` is the whole SVG document, at most 131,072 characters.
 - Without `isInteractive` the surface draws it as an image; with it, in a script-less sandboxed
-  frame (hover, tooltips). The mod sets `isInteractive`.
+  frame (hover, tooltips). Since 0.7.3 the mod draws it as an image; until 0.7.2 it set
+  `isInteractive`.
 - **`<image>` with a PNG data URI renders only without `isInteractive`** (probe, 6.10.2026). In the
-  sandboxed frame it draws nothing, so Ferro's frames are vector strokes. Drawn as an image, the PNG
-  shows.
+  sandboxed frame it draws nothing, which is why Ferro's frames were vector strokes until 0.7.2.
+  Drawn as an image, the PNG shows.
 - **SMIL animates in both modes** (`animateTransform` in the same probe). The types name SMIL as a
   reason for `isInteractive`, but the image mode animated it too.
 - **Ferro's own scene from PNG frames, drawn as an image, looks the same as the vector one**
@@ -40,6 +41,8 @@ every few days, so check again when the mod misbehaves after an update.
   120,006 as vector strokes.
 - In the first probe (a small test drawing), the image-mode `Svg` came out wider than the `width`
   it was given. With Ferro's scene and the same `width` and `height` as the mod passes, it did not.
+- Scrolling the band restarted the animation in both modes (second probe): the image mode is no
+  worse than the sandboxed frame here.
 
 ## The band above the prompt
 

@@ -100,13 +100,21 @@ test('the width follows the band, at most 1280 px', async ($: any, on) => {
   expect((await band($, 'desktop', props(10))).svg?.props.width).toBe(300)
 })
 
+test('the scene is drawn as an image: the sandboxed frame does not render the PNG frames', async ($: any, on) => {
+  const { clock } = setup(on)
+  await $.turn.start({ text: 'x', turnId: 't1' })
+  await clock.advance(25_000)
+  const { svg } = await band($)
+  expect(svg?.props.source).toContain('<image')
+  expect(svg?.props.isInteractive).toBeUndefined()
+})
+
 test('the scenes of every background fit the Svg element limit', async () => {
   const { SCENES } = await import('./scene')
   expect(SCENES.length).toBeGreaterThan(0)
   for (const s of SCENES) {
     for (const r of [s.run, s.runStill, s.runSit]) {
       expect(r.svg.length + r.ball.length).toBeLessThanOrEqual(131072)
-      expect(r.svg + r.ball).not.toContain('<image')
       // the ball goes in whole, inside the scene
       const withBall = r.svg.slice(0, r.ballAt) + r.ball + r.svg.slice(r.ballAt)
       expect(withBall.startsWith('<svg') && withBall.endsWith('</svg>')).toBe(true)
