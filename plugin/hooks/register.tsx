@@ -10,7 +10,7 @@ const RUN_AFTER_MS = 20_000
 const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
 // Each turn she sits and looks at the viewer, sniffs a spot, poops while walking, or poops in one
-// spot: 50-20-20-10 since sniffing came in (it was 60-30-10). The real Ferro rarely stops to poop
+// spot (Vatra: 50-20-20-10 since sniffing came in, before 60-30-10). The real Ferro rarely stops to poop
 // in one spot.
 const SIT_SHARE = 0.5
 const SNIFF_SHARE = 0.2
