@@ -460,6 +460,89 @@ def run_sit_scene(meadow: dict, dog_x: int, dog_y: int, ball: bool = False,
     return svg(body, defs, meadow, height)
 
 
+# Sniffing, a turn of its own: run, slow down with the head lowering (sniff-0), then a few times
+# in a row: walk with the nose to the grass (sniff-1 to 4) and stop to sniff one spot, the head
+# bobbing between the nose on the grass (sniff-5) and one pixel higher (sniff-up); lift the head
+# (sniff-0 again) and run. How many stops (1 to SNIFF_MAX_STOPS) the mod picks per turn, so each
+# count is a scene of its own. Each stop has its own walk and number of bobs, so they differ.
+SNIFF_MAX_STOPS = 5
+SNIFF_TURN = (0.35, 12)  # (seconds, px of ground) of sniff-0, when she slows down and when she lifts her head
+SNIFF_WALK_SPEED = 20  # px/s of the ground while she walks with her nose down
+SNIFF_FRAME_S = 0.22
+SNIFF_WALKS = [1.8, 1.2, 2.2, 1.0, 1.5]  # seconds of walking before each stop
+SNIFF_BOBS = [3, 2, 4, 2, 3]  # head bobs at each stop
+SNIFF_DOWN_S, SNIFF_UP_S, SNIFF_LAST_S = 0.32, 0.14, 0.4  # nose on the grass, head up, last sniff
+
+
+def windows(times: list[tuple[float, float]], period: float) -> str:
+    """display="inline" only within the given (start, end) windows of the loop."""
+    vals, keys = ["none"], [0.0]
+    for a, b in times:
+        vals += ["inline", "none"]
+        keys += [a, b]
+    return discrete("display", vals, keys, period)
+
+
+def run_sniff_scene(meadow: dict, dog_x: int, dog_y: int, stops: int, ball: bool = False,
+                    run_before: float = RUN_BEFORE) -> str:
+    mw = meadow["width"]
+    turn_s, turn_px = SNIFF_TURN
+    ground_total = GROUND_TILES * mw
+
+    # the timeline: (what, start, end) and the path of the ground through it
+    t, d = run_before, run_before * RUN_SPEED
+    ground_pts = [(0, 0), (t, -d)]
+    turns, walks, downs, ups = [(t, t + turn_s)], [], [], []
+    t, d = t + turn_s, d + turn_px
+    ground_pts.append((t, -d))
+    for k in range(stops):
+        walks.append((t, t + SNIFF_WALKS[k]))
+        t, d = t + SNIFF_WALKS[k], d + SNIFF_WALKS[k] * SNIFF_WALK_SPEED
+        ground_pts.append((t, -d))
+        for _ in range(SNIFF_BOBS[k]):
+            downs.append((t, t + SNIFF_DOWN_S))
+            ups.append((t + SNIFF_DOWN_S, t + SNIFF_DOWN_S + SNIFF_UP_S))
+            t += SNIFF_DOWN_S + SNIFF_UP_S
+        downs.append((t, t + SNIFF_LAST_S))
+        t += SNIFF_LAST_S
+        ground_pts.append((t, -d))
+    turns.append((t, t + turn_s))
+    t, d = t + turn_s, d + turn_px
+    ground_pts.append((t, -d))
+    sniff_start, sniff_end = run_before, t
+    period = sniff_end + (ground_total - d) / RUN_SPEED
+    ground_pts.append((period, -ground_total))
+    back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
+    y_back = meadow["sky_h"]
+    y_ground = meadow["sky_h"] + meadow["back_h"]
+
+    defs = meadow_defs(meadow)
+    defs += [sprite_def(f"r{i}", f"run-{i}.png") for i in sorted(set(RUN_ORDER))]
+    defs += [sprite_def(f"n{i}", f"sniff-{i}.png") for i in range(6)]
+    defs += [sprite_def("nu", "sniff-up.png")]
+
+    layers = (
+        clouds_layer(meadow)
+        + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
+        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
+    )
+    dog = (
+        "<g>"
+        + discrete("display", ["inline", "none", "inline"], [0, sniff_start, sniff_end], period)
+        + cycle("r", RUN_ORDER, RUN_FRAME_S)
+        + "</g>"
+    )
+    dog += f'<g display="none">{windows(turns, period)}<use href="#n0"/></g>'
+    dog += f'<g display="none">{windows(walks, period)}{cycle("n", [1, 2, 3, 4], SNIFF_FRAME_S)}</g>'
+    dog += f'<g display="none">{windows(downs, period)}<use href="#n5"/></g>'
+    dog += f'<g display="none">{windows(ups, period)}<use href="#nu"/></g>'
+
+    height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
+    ball_el = ball_layer(ground_pts, sniff_start, sniff_end, period, dog_x, dog_y) if ball else ""
+    body = layers + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
+    return svg(body, defs, meadow, height)
+
+
 def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
     mw = meadow["width"]
     breath_frames = list(dict.fromkeys(name for name, _ in BREATH))
@@ -542,6 +625,16 @@ def main() -> None:
             (preview / f"{prefix}{file}.svg").write_text(plain, encoding="utf-8")
             (preview / f"{prefix}ball-{file}.svg").write_text(with_ball, encoding="utf-8")
             print(name, key, len(plain), "with the ball", len(with_ball), "chars; limit 131072")
+        # sniffing (not in the mod yet): every count of stops is measured; the preview has each
+        # count on the summer meadow, the ball with three stops, and three stops on the others
+        for n in range(1, SNIFF_MAX_STOPS + 1):
+            plain = run_sniff_scene(meadow, dog_x, dog_y, n)
+            with_ball = run_sniff_scene(meadow, dog_x, dog_y, n, ball=True)
+            if k == 0 or n == 3:
+                (preview / f"{prefix}sniff-{n}.svg").write_text(plain, encoding="utf-8")
+            if k == 0 and n == 3:
+                (preview / f"{prefix}ball-sniff-{n}.svg").write_text(with_ball, encoding="utf-8")
+            print(name, f"sniff {n} stops", len(plain), "with the ball", len(with_ball), "chars")
         sleep = sleep_scene(meadow, dog_x, dog_y)
         (preview / f"{prefix}sleep.svg").write_text(sleep, encoding="utf-8")
         print(name, "sleep", len(sleep), "chars", "" if name in IN_MOD else "(preview only, not in the mod)")

@@ -22,8 +22,10 @@ PALETTE_FILE = ROOT / "assets" / "palette.json"
 # How many source pixels make one real pixel. The dog is drawn at a different size in each
 # image, so the factor evens out the dog's height from ear tip to ground (run ~240, poop and
 # sleep ~220, poop-walk ~236). sit.png is drawn bigger still, with a bigger head: 9.0 makes
-# the head the size of the other frames.
-FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8, "sit": 9.0}
+# the head the size of the other frames. In sniff.png her head is down, so its factor evens out
+# the length instead: the walking frames come out 51-55 pixels long, like standing (poop-0, 51)
+# and running (56).
+FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8, "sit": 9.0, "sniff": 6.0}
 # Sheets whose small figures are a row of droppings: each one is saved on its own as
 # <name>-drop-<i>.png. In poop.png the small figure is the pile next to the frame making it.
 # ChatGPT drew them bigger than asked (the largest as wide as a third of the dog), so they get
@@ -81,6 +83,10 @@ ANCHOR_X = 54
 # Sheets where the head turns, so the ear moves: their frames are aligned on the front toes
 # (the rightmost pixel of the bottom rows) instead, which stay planted.
 TOES_X = {"sit": 54}
+# Sheets where the head is down, so the top quarter of the figure is the tail and the back, not
+# the ear: their frames are aligned on the nose (the rightmost pixel), at the x of the nose of a
+# running frame, so she keeps her place when she drops her nose out of a run.
+NOSE_X = {"sniff": 58}
 
 
 def ear_right(px: np.ndarray, transparent: int) -> int:
@@ -403,6 +409,30 @@ def breathing(palette: np.ndarray, dark: set, outline: int) -> None:
         print("breath", k, "columns", x0, "-", x1)
 
 
+# Sniffing a spot: the head bobs between the nose on the grass (sniff-5) and one pixel higher.
+# sniff-up is derived from sniff-5 by raising every column from SNIFF_HEAD_X to the nose: the
+# head and the ears, never the front legs, which end left of it. ChatGPT would redraw the dog.
+SNIFF_FROM = "sniff-5"
+SNIFF_HEAD_X = 46
+
+
+def sniff_bob(palette: np.ndarray, dark: set, outline: int) -> None:
+    src = np.asarray(Image.open(OUT / f"{SNIFF_FROM}.png").convert("RGBA"))
+    a = src.copy()
+    a[:-1, SNIFF_HEAD_X:] = src[1:, SNIFF_HEAD_X:]
+    a[-1, SNIFF_HEAD_X:] = 0
+    # fur left next to the background where the raised head meets the neck: close the outline
+    dark_rgb = {tuple(int(c) for c in palette[i]) for i in dark}
+    solid = a[..., 3] > 0
+    p = np.pad(solid, 1)
+    exposed = solid & ~(p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:])
+    for y, x in zip(*np.where(exposed)):
+        if tuple(int(c) for c in a[y, x, :3]) not in dark_rgb:
+            a[y, x, :3] = palette[outline]
+    Image.fromarray(a, "RGBA").save(OUT / "sniff-up.png")
+    print("sniff-up from", SNIFF_FROM, "columns", SNIFF_HEAD_X, "and right")
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name in BACKGROUNDS:
@@ -450,6 +480,8 @@ def main() -> None:
             ear = ear_right(px, transparent) if px.shape[1] >= 20 else 0
             if name in TOES_X and px.shape[1] >= 20:
                 ear = int(np.where((px[-2:] != transparent).any(0))[0].max())  # front toes
+            if name in NOSE_X and px.shape[1] >= 20:
+                ear = int(np.where((px != transparent).any(0))[0].max())  # nose
             clean_edges(px, transparent, dark, {tongue_i, white_i}, outline)
             catchlights(px, white[box] & own, factor, white_i, dark, transparent)
             solid = px != transparent
@@ -463,7 +495,7 @@ def main() -> None:
             if px.shape[1] < 20:  # the pile, not the dog
                 continue
             # alignment: ear at ANCHOR_X, height from the source image's ground
-            x = TOES_X.get(name, ANCHOR_X) - ear
+            x = TOES_X.get(name, NOSE_X.get(name, ANCHOR_X)) - ear
             y = CANVAS_H - int(round((ground - box[0].start) / FACTOR[name]))
             canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H))
             canvas.paste(img, (x, y), img)
@@ -499,6 +531,7 @@ def main() -> None:
     breathing(palette, dark, outline)
     ball(palette[outline])
     blink(palette, dark, outline)
+    sniff_bob(palette, dark, outline)
 
 
 if __name__ == "__main__":
