@@ -105,9 +105,11 @@ Rules for this sheet:
 - Use only the colours from the palette in the reference.
 ```
 
-## Message for the nose-down walk (written 6.10.2026, not drawn yet)
+## Message for the nose-down walk (6.10.2026, result rejected)
 
 Attach `ferro-ref.png` and `assets/src/sniff.png`; save the result as `assets/src/sniff-walk.png`. It replaces frames 2-5 of `sniff.png`. The message names the near and far legs and says outright that frame 4 is frame 1 with the legs swapped, because "front left paw steps forward" alone gave two identical frames.
+
+Result: Vatra liked the first sheet better (the new one had a different head, and the body sat two pixels lower). Shown on one page in motion, three walks were all rejected (6.10.2026): the first sheet as drawn (two poses per leg); the first sheet with near and far leg colours swapped in the second half of the step ("the front leg moves too much"); this sheet ("looks like she cannot move her legs"). The sheet was not kept. Transplanting this sheet's legs onto the first sheet's body was not tried: the bodies differ in height, leg length and hind leg position.
 
 ```text
 Sprite sheet: Ferro walking slowly forward with her nose to the ground, a 6-frame walk cycle that loops. Keep her pose from the attached sniff sheet (sniff.png), frames 2 to 5: the same head held low with the nose just above the ground line, the same back, tail and size. Only the legs move.
