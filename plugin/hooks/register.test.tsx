@@ -113,13 +113,36 @@ test('the scenes of every background fit the Svg element limit', async () => {
   const { SCENES } = await import('./scene')
   expect(SCENES.length).toBeGreaterThan(0)
   for (const s of SCENES) {
-    for (const r of [s.run, s.runStill, s.runSit, s.runSniff]) {
-      expect(r.svg.length + r.ball.length).toBeLessThanOrEqual(131072)
+    expect(s.programs.length).toBeGreaterThan(0)
+    for (const p of s.programs) {
+      expect(s.head.length + p.body.length + p.ball.length).toBeLessThanOrEqual(131072)
       // the ball goes in whole, inside the scene
-      const withBall = r.svg.slice(0, r.ballAt) + r.ball + r.svg.slice(r.ballAt)
+      const withBall = s.head + p.body.slice(0, p.ballAt) + p.ball + p.body.slice(p.ballAt)
       expect(withBall.startsWith('<svg') && withBall.endsWith('</svg>')).toBe(true)
       expect(withBall).toContain('<use href="#ball"')
     }
     expect(s.sleep.length).toBeLessThanOrEqual(131072)
   }
+})
+
+test('every turn picks a program of its background', async ($: any, on) => {
+  const { SCENES } = await import('./scene')
+  const { clock } = setup(on)
+  const seen = new Set<string>()
+  for (let i = 0; i < 40; i++) {
+    await $.turn.start({ text: 'x', turnId: `t${i}` })
+    await clock.advance(20_000)
+    const source: string = (await band($)).svg?.props.source
+    const k = SCENES.findIndex(s => source.startsWith(s.head))
+    expect(k).toBeGreaterThanOrEqual(0)
+    const body = source.slice(SCENES[k].head.length)
+    const j = SCENES[k].programs.findIndex(
+      p => body === p.body || body === p.body.slice(0, p.ballAt) + p.ball + p.body.slice(p.ballAt),
+    )
+    expect(j).toBeGreaterThanOrEqual(0)
+    seen.add(`${k}-${j}`)
+    await $.turn.complete(complete(`t${i}`))
+  }
+  // 40 turns over 2 backgrounds x 10 programs (with or without the ball) do not all play the same run
+  expect(seen.size).toBeGreaterThan(1)
 })

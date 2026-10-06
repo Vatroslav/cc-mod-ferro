@@ -3,3 +3,8 @@ __pycache__/
 
 # before/after comparisons, only for viewing
 preview/*.png
+
+# the programs, only for viewing (tools/scene.py writes them; scene.ts has them all)
+preview/program-*.svg
+preview/ball-program-*.svg
+preview/programs.html

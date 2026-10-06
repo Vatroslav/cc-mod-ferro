@@ -1,8 +1,10 @@
-"""Builds two SVG scenes per background from assets/px and writes them to hooks/scene.ts
-(and to preview/ for viewing):
+"""Builds the SVG scenes per background from assets/px and writes them to hooks/scene.ts (and to
+preview/ for viewing):
 
-- RUN: Ferro runs across the meadow (three layers scroll at different speeds), stops now and
-  then to poop, and the pile stays on the meadow and scrolls away to the left.
+- RUN: Ferro runs across the meadow (three layers scroll at different speeds) and now and then
+  stops to do something: sit and look at the viewer, sniff a spot, poop while walking or poop in
+  one spot. What she leaves on the meadow stays there and scrolls away to the left. A program is
+  one run with its stops; the mod plays one of PROGRAMS per turn.
 - SLEEP: Ferro lies down and falls asleep, the clouds keep drifting, z's rise above her head.
 
 Every drawing is a PNG (data URI) in an <image> inside <defs>, and the scene places it with
@@ -12,9 +14,12 @@ Run (from the repo root, after tools/build.py): python tools/scene.py
 """
 
 import base64
+import html
 import io
 import json
 import math
+import random
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from PIL import Image
@@ -24,6 +29,7 @@ PX = ROOT / "assets" / "px"
 
 SCALE = 2  # CSS pixels per pixel
 VW = 640  # viewBox width; a band narrower than VW*SCALE crops the edges, it does not shrink the pixels
+SVG_LIMIT = 131072  # characters the Desktop band accepts in one Svg
 RUN_SPEED = 80  # px/s of the ground while she runs
 CLOUD_SPEED = 4  # px/s, the clouds drift even while she sleeps
 RUN_FRAME_S = 0.13  # any faster and the legs look like they twitch
@@ -32,14 +38,33 @@ RUN_FRAME_S = 0.13  # any faster and the legs look like they twitch
 # push-off with the hind legs (0). Frame 1 is a second "stretched" frame, left out.
 RUN_ORDER = [4, 3, 2, 5, 0]
 
-# Schedule of one RUN loop: run, poop, run. The second run lasts exactly long enough for the
-# ground to travel 20 meadow widths in one loop and the hills (at 0.35 of the speed) exactly 7,
-# so the loop continues without a jump.
-RUN_BEFORE = 16.0
-POOP = [(0, 0.5), (1, 0.35), (2, 0.35), (3, 1.3), (4, 1.6), (5, 0.45)]  # (frame, seconds)
-WALK_AWAY_PX = 13  # how far she moves away from the pile in the last frame
+# The loop closes when the ground has travelled a whole number of GROUND_TILES meadow widths:
+# then the hills (at BACK_RATIO of the speed) have travelled a whole number of widths too (7 per
+# 20), and the loop continues without a jump.
+RUN_BEFORE = 16.0  # seconds of running before the first stop
 GROUND_TILES = 20
 BACK_RATIO = 0.35
+FINAL_RUN_MIN_S = 12.0  # at least this much running after the last stop, before the loop starts again
+
+# Programs: what Ferro does on one turn's run and when. The run lasts at most 160 s (from 20 s into
+# the turn to 3 min, when she falls asleep), so the stops start within PROGRAM_S and a turn ends
+# before the loop starts again. SMIL has no randomness, so the programs are drawn here with a
+# fixed seed and the mod picks one per turn. The first stops of a background's programs come in
+# exactly the WEIGHTS shares, because most turns see only the first one or two (measured
+# 6.10.2026 on 30 days of turns: half of the turns in which Ferro shows end before 79 s); the
+# later stops are drawn with the same weights. Never the same stop twice in a row, and she poops
+# at most once per run. Not every program has every stop.
+PROGRAM_S = 160
+PROGRAMS = 10  # per background
+GAP_S = (12.0, 22.0)  # seconds of running between two stops
+SEED = 6
+WEIGHTS = {"sit": 0.5, "sniff": 0.2, "walkPoop": 0.2, "stillPoop": 0.1}
+POOPS = {"walkPoop", "stillPoop"}
+SAYS = {"sit": "sits", "sniff": "sniffs", "walkPoop": "poops while walking", "stillPoop": "poops in one spot"}
+
+# Pooping in one spot: (frame, seconds) of poop.png
+POOP = [(0, 0.5), (1, 0.35), (2, 0.35), (3, 1.3), (4, 1.6), (5, 0.45)]
+WALK_AWAY_PX = 13  # how far she moves away from the pile in the last frame
 
 # Sleep: intro (frame, seconds), then breathing on the last frame. build.py derives the
 # breathing frame from sleep-5 (back raised by one pixel, head in place); ChatGPT would redraw
@@ -58,8 +83,13 @@ IN_MOD = ["meadow", "autumn"]
 Z_GLYPH = ["####", "..#.", ".#..", "####"]
 
 
-def fmt(t: float) -> str:
-    return f"{t:.4f}".rstrip("0").rstrip(".")
+def fmt(t: float, digits: int = 4) -> str:
+    return f"{t:.{digits}f}".rstrip("0").rstrip(".")
+
+
+def key(t: float, period: float) -> str:
+    """A keyTime: five decimals, so a frame change in a three-minute loop lands within 2 ms."""
+    return fmt(t / period, 5)
 
 
 def size(name: str) -> tuple[int, int]:
@@ -85,7 +115,7 @@ def sprite_def(id_: str, name: str) -> str:
 def linear(points: list[tuple[float, float]], period: float, y: int = 0, repeat: bool = True) -> str:
     """Movement along x through key points (second, x), linear between them."""
     vals = ";".join(f"{fmt(x)} {y}" for _, x in points)
-    keys = ";".join(fmt(t / period) for t, _ in points)
+    keys = ";".join(key(t, period) for t, _ in points)
     rep = 'repeatCount="indefinite"' if repeat else 'fill="freeze"'
     return (
         f'<animateTransform attributeName="transform" type="translate" values="{vals}" '
@@ -95,217 +125,39 @@ def linear(points: list[tuple[float, float]], period: float, y: int = 0, repeat:
 
 def discrete(attr: str, values: list[str], times: list[float], period: float) -> str:
     """Discrete animation over the whole loop; times are the start of each value in seconds."""
-    keys = ";".join(fmt(t / period) for t in times)
+    keys = ";".join(key(t, period) for t in times)
     return (
         f'<animate attributeName="{attr}" values="{";".join(values)}" keyTimes="{keys}" '
         f'dur="{fmt(period)}s" calcMode="discrete" repeatCount="indefinite"/>'
     )
 
 
+def windows(times: list[tuple[float, float]], period: float) -> str:
+    """display="inline" only within the given (start, end) windows of the loop; a window may
+    start at 0 or end at the end of the loop, and windows that touch are joined."""
+    merged: list[tuple[float, float]] = []
+    for a, b in sorted(times):
+        if merged and a <= merged[-1][1] + 1e-9:
+            merged[-1] = (merged[-1][0], max(b, merged[-1][1]))
+        else:
+            merged.append((a, b))
+    vals, keys = ["none"], [0.0]
+    for a, b in merged:
+        if a == 0:
+            vals[-1] = "inline"
+        else:
+            vals.append("inline")
+            keys.append(a)
+        if b < period:
+            vals.append("none")
+            keys.append(b)
+    return discrete("display", vals, keys, period)
+
+
 def tiles(tile: str, y: int, width: int, travel: float) -> str:
     """Enough copies of a layer to cover the viewBox and the whole distance it travels in a loop."""
     copies = math.ceil((VW + travel) / width) + 1
     return "".join(f'<use href="#{tile}" x="{k * width}" y="{y}"/>' for k in range(copies))
-
-
-def meadow_defs(meadow: dict) -> list[str]:
-    name = meadow["name"]
-    return [
-        sprite_def("clouds", f"{name}-clouds.png"),
-        sprite_def("back", f"{name}-back.png"),
-        sprite_def("ground", f"{name}-ground.png"),
-    ]
-
-
-def clouds_layer(meadow: dict) -> str:
-    mw = meadow["width"]
-    period = mw / CLOUD_SPEED
-    return f"<g>{linear([(0, 0), (period, -mw)], period)}{tiles('clouds', 0, mw, mw)}</g>"
-
-
-def svg(body: str, defs: list[str], meadow: dict, height: int) -> str:
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{VW * SCALE}" height="{height * SCALE}" '
-        f'viewBox="0 0 {VW} {height}" preserveAspectRatio="xMidYMid slice" '
-        f'shape-rendering="crispEdges" image-rendering="pixelated" style="image-rendering:pixelated">'
-        f'<rect width="{VW}" height="{height}" fill="{meadow["sky"]}"/>'
-        f'<defs>{"".join(defs)}</defs>{body}</svg>'
-    )
-
-
-def run_scene(meadow: dict, dog_x: int, dog_y: int, ball: bool = False) -> str:
-    mw = meadow["width"]
-    poop_start = RUN_BEFORE
-    poop_len = sum(s for _, s in POOP)
-    walk_from = poop_start + poop_len - POOP[-1][1]
-    poop_end = poop_start + poop_len
-    pile_at = poop_start + sum(s for _, s in POOP[:4])
-    ground_total = GROUND_TILES * mw
-    run_after = (ground_total - WALK_AWAY_PX) / RUN_SPEED - RUN_BEFORE
-    period = poop_end + run_after
-    d1 = RUN_BEFORE * RUN_SPEED
-
-    # path of the ground through the loop: runs, stands, steps away, runs to the end
-    ground_pts = [(0, 0), (poop_start, -d1), (walk_from, -d1), (poop_end, -d1 - WALK_AWAY_PX),
-                  (period, -ground_total)]
-    back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
-    y_back = meadow["sky_h"]
-    y_ground = meadow["sky_h"] + meadow["back_h"]
-
-    defs = meadow_defs(meadow) + [sprite_def("pile", "poop-pile.png")]
-    for i in sorted(set(RUN_ORDER)):
-        defs.append(sprite_def(f"r{i}", f"run-{i}.png"))
-    for i, _ in enumerate(POOP):
-        defs.append(sprite_def(f"p{i}", f"poop-{i}.png"))
-
-    layers = (
-        clouds_layer(meadow)
-        + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
-        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
-    )
-
-    # running: its own fast cycle, the whole group hidden while she poops
-    cycle = RUN_FRAME_S * len(RUN_ORDER)
-    run_imgs = ""
-    for slot, frame in enumerate(RUN_ORDER):
-        vals = ";".join("visible" if j == slot else "hidden" for j in range(len(RUN_ORDER)))
-        run_imgs += (
-            f'<use href="#r{frame}" visibility="hidden"><animate attributeName="visibility" '
-            f'values="{vals}" dur="{fmt(cycle)}s" calcMode="discrete" repeatCount="indefinite"/></use>'
-        )
-    run_group = (
-        "<g>"
-        + discrete("display", ["inline", "none", "inline"], [0, poop_start, poop_end], period)
-        + run_imgs
-        + "</g>"
-    )
-
-    poop_imgs = ""
-    t = poop_start
-    for i, (_, s) in enumerate(POOP):
-        poop_imgs += (
-            f'<use href="#p{i}" display="none">'
-            + discrete("display", ["none", "inline", "none"], [0, t, t + s], period)
-            + "</use>"
-        )
-        t += s
-
-    # the pile stays in place on the meadow, so it scrolls with the ground
-    pile = json.loads((PX / "poop-pile.json").read_text())
-    pile_pts = [(0, 0), (walk_from, 0), (poop_end, -WALK_AWAY_PX),
-                (period, -WALK_AWAY_PX - run_after * RUN_SPEED)]
-    pile_el = (
-        f"<g>{linear(pile_pts, period)}"
-        f'<use href="#pile" x="{dog_x + pile["x"]}" y="{dog_y + pile["y"]}" display="none">'
-        + discrete("display", ["none", "inline"], [0, pile_at], period)
-        + "</use></g>"
-    )
-
-    height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
-    ball_el = ""
-    if ball:
-        ball_el = ball_layer(ground_pts, poop_start, poop_end, period, dog_x, dog_y)
-    body = (
-        layers
-        + pile_el
-        + ball_el
-        + f'<g transform="translate({dog_x} {dog_y})">{run_group}{poop_imgs}</g>'
-    )
-    return svg(body, defs, meadow, height)
-
-
-# The orange ball she chases: it bounces ahead of her while she runs, rolls on and comes to
-# rest on the grass when she stops to poop, and pops up again when she reaches it.
-BALL_BOUNCE_S = 0.55  # one bounce, roughly
-BALL_BOUNCE_H = 14  # px
-BALL_GAP = (8, 52)  # px between her nose and the ball while she chases it, nearest and farthest
-BALL_GAP_S = 3.7  # seconds of one swing from near to far and back
-BALL_ROLL_MIN = 40  # px the ball rolls on at least when she stops
-BALL_ROLL_S = 1.2
-NOSE_X = 58  # x of her nose on the run canvas
-
-
-def ball_layer(ground_pts: list, stop: float, go: float, period: float, dog_x: int, dog_y: int) -> str:
-    """The ball from second 0 to `stop` (when she stops to poop) and again from the moment she
-    reaches it after `go` (when she runs again) to the end of the loop."""
-    d = size("ball.png")[0]
-    top = dog_y + size("run-0.png")[1] - d  # the ball's top when it lies on the grass
-    nose = dog_x + NOSE_X
-    mid, amp = (BALL_GAP[0] + BALL_GAP[1]) / 2, (BALL_GAP[1] - BALL_GAP[0]) / 2
-
-    def swing(t: float) -> float:
-        return mid + amp * math.sin(2 * math.pi * t / BALL_GAP_S)
-
-    # while she poops, the ball lies on the meadow: it rolls on far enough that she reaches it
-    # just as she runs again (or BALL_ROLL_MIN, if she would reach it sooner)
-    x_stop = nose + swing(stop)
-    moved = at(ground_pts, go) - at(ground_pts, stop)  # negative: the ground moves left
-    roll = max(BALL_ROLL_MIN, nose + 2 - x_stop - moved)
-    reach = go
-    while reach < period and x_stop + roll + at(ground_pts, reach) - at(ground_pts, stop) > nose + 2:
-        reach += 0.01
-
-    def gap(t: float) -> float:
-        if t <= stop:
-            return swing(t)
-        g = 2 + (swing(t) - 2) * min(1.0, (t - reach) / 1.0)  # from her nose, out to the swing
-        if t > period - 1:  # back to where the loop starts
-            g += (swing(0) - g) * (t - (period - 1))
-        return g
-
-    xs = [(t, nose + gap(t)) for t in [i * 0.5 for i in range(int(stop / 0.5) + 1)] + [stop]]
-    t = reach
-    while t < period:
-        xs.append((t, nose + gap(t)))
-        t += 0.5
-    xs.append((period, nose + swing(0)))
-
-    # bounces: a whole number in each window, so the ball is on the grass when it stops and
-    # when it pops up again
-    keys = [(0.0, 0)]
-    for a, b in ((0.0, stop), (reach, period)):
-        if keys[-1][0] < a:
-            keys.append((a, 0))
-        n = max(1, round((b - a) / BALL_BOUNCE_S))
-        for i in range(n):
-            t0 = a + (b - a) * i / n
-            keys += [(t0 + (b - a) / n / 2, -BALL_BOUNCE_H), (t0 + (b - a) / n, 0)]
-    up, down, flat = "0 0 .58 1", ".42 0 1 1", "0 0 1 1"
-    splines = [up if y1 < y0 else down if y1 > y0 else flat for (_, y0), (_, y1) in zip(keys, keys[1:])]
-    bounce = (
-        f'<animateTransform attributeName="transform" type="translate" '
-        f'values="{";".join(f"0 {y}" for _, y in keys)}" '
-        f'keyTimes="{";".join(fmt(t / period) for t, _ in keys)}" calcMode="spline" '
-        f'keySplines="{";".join(splines)}" dur="{fmt(period)}s" repeatCount="indefinite"/>'
-    )
-    chased = (
-        "<g>" + discrete("display", ["inline", "none", "inline"], [0, stop, reach], period)
-        + f"<g>{linear(xs, period)}<g>{bounce}"
-        + f'<use href="#ball" x="0" y="{top}"/></g></g></g>'
-    )
-
-    # lying on the meadow: placed where the ground is when she stops, rolls on, then scrolls with
-    # the ground until she reaches it
-    roll_pts = [(0, 0), (stop, 0), (stop + BALL_ROLL_S / 2, roll * 0.75), (stop + BALL_ROLL_S, roll),
-                (period, roll)]
-    resting = (
-        "<g>" + discrete("display", ["none", "inline", "none"], [0, stop, reach], period)
-        + f"<g>{linear(ground_pts, period)}<g>{linear(roll_pts, period)}"
-        + f'<use href="#ball" x="{round(x_stop - at(ground_pts, stop))}" y="{top}"/></g></g></g>'
-    )
-    # its own <defs>, so the scene with the ball is the plain scene with this one piece inserted
-    return f'<defs>{sprite_def("ball", "ball.png")}</defs>' + chased + resting
-
-
-# Pooping while walking, the way the real Ferro does it (run_scene, pooping in one spot, is the
-# rare variant): run, crouch with frames 1-2 of poop.png, walk hunched while the ground moves
-# slowly and a dropping falls behind her now and then, stand up with frame 5 of poop.png, run.
-CROUCH = [(1, 0.3), (2, 0.3)]  # (poop frame, seconds)
-HUNCH_WALK_S = 7.0
-HUNCH_WALK_SPEED = 22  # px/s of the ground while she walks hunched
-HUNCH_FRAME_S = 0.2
-DROPS = [(0.8, 0), (2.5, 1), (4.2, 1), (5.9, 2)]  # (seconds into the walk, dropping sprite)
-REAR_X = 12  # x of her rear on the poop-walk canvas, where the droppings fall
 
 
 def at(points: list[tuple[float, float]], t: float) -> float:
@@ -329,212 +181,354 @@ def cycle(prefix: str, frames: list, frame_s: float) -> str:
     return out
 
 
-def shown(inner: str, start: float, end: float, period: float) -> str:
-    """Shown only from second `start` to `end` of the loop."""
-    return (
-        "<g>" + discrete("display", ["none", "inline", "none"], [0, start, end], period)
-        + inner + "</g>"
-    )
+def meadow_defs(meadow: dict) -> list[str]:
+    name = meadow["name"]
+    return [
+        sprite_def("clouds", f"{name}-clouds.png"),
+        sprite_def("back", f"{name}-back.png"),
+        sprite_def("ground", f"{name}-ground.png"),
+    ]
 
 
-def run_walk_scene(meadow: dict, dog_x: int, dog_y: int, run_before: float = RUN_BEFORE,
-                   ball: bool = False) -> str:
+def clouds_layer(meadow: dict) -> str:
     mw = meadow["width"]
-    crouch_start = run_before
-    walk_start = crouch_start + sum(s for _, s in CROUCH)
-    walk_end = walk_start + HUNCH_WALK_S
-    poop_end = walk_end + POOP[-1][1]
-    ground_total = GROUND_TILES * mw
-    d1 = run_before * RUN_SPEED
-    d2 = d1 + HUNCH_WALK_S * HUNCH_WALK_SPEED
-    d3 = d2 + WALK_AWAY_PX
-    period = poop_end + (ground_total - d3) / RUN_SPEED
+    period = mw / CLOUD_SPEED
+    return f"<g>{linear([(0, 0), (period, -mw)], period)}{tiles('clouds', 0, mw, mw)}</g>"
 
-    # path of the ground: runs, stops while she crouches, walks slowly, steps away, runs
-    ground_pts = [(0, 0), (crouch_start, -d1), (walk_start, -d1), (walk_end, -d2),
-                  (poop_end, -d3), (period, -ground_total)]
-    back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
-    y_back = meadow["sky_h"]
-    y_ground = meadow["sky_h"] + meadow["back_h"]
 
-    walk_frames = sorted(PX.glob("poop-walk-[0-9].png"))
-    drop_sprites = sorted({k for _, k in DROPS})
-    defs = meadow_defs(meadow)
-    defs += [sprite_def(f"r{i}", f"run-{i}.png") for i in sorted(set(RUN_ORDER))]
-    defs += [sprite_def(f"p{i}", f"poop-{i}.png") for i in [i for i, _ in CROUCH] + [len(POOP) - 1]]
-    defs += [sprite_def(f"w{i}", f.name) for i, f in enumerate(walk_frames)]
-    defs += [sprite_def(f"d{k}", f"poop-walk-drop-{k}.png") for k in drop_sprites]
-
-    layers = (
-        clouds_layer(meadow)
-        + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
-        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
-    )
-
-    run_group = (
-        "<g>"
-        + discrete("display", ["inline", "none", "inline"], [0, crouch_start, poop_end], period)
-        + cycle("r", RUN_ORDER, RUN_FRAME_S)
-        + "</g>"
-    )
-    dog = run_group
-    t = crouch_start
-    for i, s in CROUCH:
-        dog += shown(f'<use href="#p{i}"/>', t, t + s, period)
-        t += s
-    dog += shown(cycle("w", list(range(len(walk_frames))), HUNCH_FRAME_S), walk_start, walk_end, period)
-    dog += shown(f'<use href="#p{len(POOP) - 1}"/>', walk_end, poop_end, period)
-
-    # droppings lie on the meadow: each is placed where the ground is when it falls, then
-    # scrolls with the ground
-    canvas_h = size("poop-walk-0.png")[1]
-    drops = ""
-    for s, k in DROPS:
-        t_drop = walk_start + s
-        w, h = size(f"poop-walk-drop-{k}.png")
-        x = round(dog_x + REAR_X - w // 2 - at(ground_pts, t_drop))
-        drops += (
-            f'<use href="#d{k}" x="{x}" y="{dog_y + canvas_h - h}" display="none">'
-            + discrete("display", ["none", "inline"], [0, t_drop], period)
-            + "</use>"
-        )
-    drops_el = f"<g>{linear(ground_pts, period)}{drops}</g>"
-
+def svg_head(defs: list[str], meadow: dict) -> str:
+    """The scene up to and including </defs>; the body and </svg> follow."""
     height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
-    ball_el = ""
-    if ball:
-        ball_el = ball_layer(ground_pts, crouch_start, poop_end, period, dog_x, dog_y)
-    body = layers + drops_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
-    return svg(body, defs, meadow, height)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{VW * SCALE}" height="{height * SCALE}" '
+        f'viewBox="0 0 {VW} {height}" preserveAspectRatio="xMidYMid slice" '
+        f'shape-rendering="crispEdges" image-rendering="pixelated" style="image-rendering:pixelated">'
+        f'<rect width="{VW}" height="{height}" fill="{meadow["sky"]}"/>'
+        f'<defs>{"".join(defs)}</defs>'
+    )
 
 
-# Sitting and looking at the viewer, a turn of its own instead of pooping: run, brake, sit, turn
-# the head to the viewer, blink and tilt the head, turn back, stand up, run. The frames are
-# sit.png (0 brake, 1 sitting down, 2 sitting in profile, 3 head three-quarters, 4 facing the
-# viewer, 5 head tilt) and sit-blink.png, derived from 4.
+# What Ferro does at a stop. Each kind is a function that returns a Stop; a new kind is one more
+# function here and one more entry in WEIGHTS and SAYS.
+@dataclass
+class Stop:
+    """What Ferro does between two runs. Times are seconds from the moment she stops running.
+    `ground`: (second, px) how far the ground has moved by then, from (0, 0) to the end of the stop.
+    `stills`: the windows in which each drawing shows on her canvas.
+    `sprites`: the file of every sprite id the stop uses.
+    `cycles`: frames looping within a window, (prefix, frames, seconds per frame, start, end).
+    `props`: what she leaves on the meadow, (sprite id, second it appears, x, y on her canvas)."""
+    dur: float
+    ground: list[tuple[float, float]]
+    stills: dict[str, list[tuple[float, float]]]
+    sprites: dict[str, str]
+    cycles: list[tuple[str, list[int], float, float, float]] = field(default_factory=list)
+    props: list[tuple[str, float, int, int]] = field(default_factory=list)
+
+
+def sequence(frames: list[tuple[str, float]]) -> tuple[dict[str, list[tuple[float, float]]], float]:
+    """Drawings shown one after another: their windows and the total length."""
+    stills: dict[str, list[tuple[float, float]]] = {}
+    t = 0.0
+    for id_, s in frames:
+        stills.setdefault(id_, []).append((t, t + s))
+        t += s
+    return stills, t
+
+
+def still_poop() -> Stop:
+    """Pooping in one spot, the rare way: she stops, squats, the pile drops, she steps away."""
+    stills, t = sequence([(f"p{i}", s) for i, s in POOP])
+    pile = json.loads((PX / "poop-pile.json").read_text())
+    return Stop(
+        dur=t,
+        ground=[(0, 0), (t - POOP[-1][1], 0), (t, WALK_AWAY_PX)],
+        stills=stills,
+        sprites={f"p{i}": f"poop-{i}.png" for i, _ in POOP} | {"pile": "poop-pile.png"},
+        props=[("pile", sum(s for _, s in POOP[:4]), pile["x"], pile["y"])],
+    )
+
+
+# Pooping while walking, the way the real Ferro does it: crouch with frames 1-2 of poop.png, walk
+# hunched while the ground moves slowly and a dropping falls behind her now and then, stand up
+# with frame 5 of poop.png.
+CROUCH = [(1, 0.3), (2, 0.3)]  # (poop frame, seconds)
+HUNCH_WALK_S = 7.0
+HUNCH_WALK_SPEED = 22  # px/s of the ground while she walks hunched
+HUNCH_FRAME_S = 0.2
+DROPS = [(0.8, 0), (2.5, 1), (4.2, 1), (5.9, 2)]  # (seconds into the walk, dropping sprite)
+REAR_X = 12  # x of her rear on the poop-walk canvas, where the droppings fall
+
+
+def walk_poop() -> Stop:
+    last = len(POOP) - 1
+    stills, walk_start = sequence([(f"p{i}", s) for i, s in CROUCH])
+    walk_end = walk_start + HUNCH_WALK_S
+    end = walk_end + POOP[last][1]
+    stills[f"p{last}"] = [(walk_end, end)]
+    walked = HUNCH_WALK_S * HUNCH_WALK_SPEED
+    walk_frames = sorted(PX.glob("poop-walk-[0-9].png"))
+    sprites = {f"p{i}": f"poop-{i}.png" for i in [i for i, _ in CROUCH] + [last]}
+    sprites |= {f"w{i}": f.name for i, f in enumerate(walk_frames)}
+    # the droppings fall behind her rear, on the ground line of her canvas
+    canvas_h = size("poop-walk-0.png")[1]
+    props = []
+    for s, k in DROPS:
+        w, h = size(f"poop-walk-drop-{k}.png")
+        sprites[f"d{k}"] = f"poop-walk-drop-{k}.png"
+        props.append((f"d{k}", walk_start + s, REAR_X - w // 2, canvas_h - h))
+    return Stop(
+        dur=end,
+        ground=[(0, 0), (walk_start, 0), (walk_end, walked), (end, walked + WALK_AWAY_PX)],
+        stills=stills,
+        sprites=sprites,
+        cycles=[("w", list(range(len(walk_frames))), HUNCH_FRAME_S, walk_start, walk_end)],
+        props=props,
+    )
+
+
+# Sitting and looking at the viewer: brake, sit, turn the head to the viewer, blink and tilt the
+# head, turn back, stand up. The frames are sit.png (0 brake, 1 sitting down, 2 sitting in
+# profile, 3 head three-quarters, 4 facing the viewer, 5 head tilt) and sit-blink.png, derived
+# from 4.
 SIT = [(0, 0.3), (1, 0.3), (2, 0.5), (3, 0.3), (4, 1.6), ("blink", 0.15), (4, 1.2), (5, 1.4),
        (4, 1.0), ("blink", 0.15), (4, 0.6), (3, 0.3), (2, 0.4), (1, 0.3)]  # (frame, seconds)
 BRAKE_PX = 10  # how far the ground still moves while she brakes
 
 
-def run_sit_scene(meadow: dict, dog_x: int, dog_y: int, ball: bool = False,
-                  run_before: float = RUN_BEFORE) -> str:
-    mw = meadow["width"]
-    sit_start = run_before
-    brake_end = sit_start + SIT[0][1]
-    sit_end = sit_start + sum(s for _, s in SIT)
-    ground_total = GROUND_TILES * mw
-    d1 = run_before * RUN_SPEED
-    d2 = d1 + BRAKE_PX
-    period = sit_end + (ground_total - d2) / RUN_SPEED
-
-    # path of the ground: runs, slows down while she brakes, stands while she sits, runs
-    ground_pts = [(0, 0), (sit_start, -d1), (brake_end, -d2), (sit_end, -d2), (period, -ground_total)]
-    back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
-    y_back = meadow["sky_h"]
-    y_ground = meadow["sky_h"] + meadow["back_h"]
-
-    defs = meadow_defs(meadow)
-    defs += [sprite_def(f"r{i}", f"run-{i}.png") for i in sorted(set(RUN_ORDER))]
-    defs += [sprite_def(f"s{f}", f"sit-{f}.png") for f in dict.fromkeys(f for f, _ in SIT)]
-
-    layers = (
-        clouds_layer(meadow)
-        + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
-        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
+def sit() -> Stop:
+    stills, t = sequence([(f"s{f}", s) for f, s in SIT])
+    return Stop(
+        dur=t,
+        ground=[(0, 0), (SIT[0][1], BRAKE_PX), (t, BRAKE_PX)],
+        stills=stills,
+        sprites={f"s{f}": f"sit-{f}.png" for f, _ in SIT},
     )
-    dog = (
-        "<g>"
-        + discrete("display", ["inline", "none", "inline"], [0, sit_start, sit_end], period)
-        + cycle("r", RUN_ORDER, RUN_FRAME_S)
-        + "</g>"
-    )
-    t = sit_start
-    for f, s in SIT:
-        dog += shown(f'<use href="#s{f}"/>', t, t + s, period)
-        t += s
-
-    height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
-    ball_el = ball_layer(ground_pts, sit_start, sit_end, period, dog_x, dog_y) if ball else ""
-    body = layers + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
-    return svg(body, defs, meadow, height)
 
 
-# Sniffing one spot, a turn of its own: run, slow down with the head lowering (sniff-0), sniff with
-# the head bobbing between the nose on the grass (sniff-5) and one pixel higher (sniff-up), lift
-# the head (sniff-0 again), run. The walk with the nose down (sniff-1 to 4) is not used: no drawing
-# of it looked right, and neither did 1 to 5 spots with a dash between them (Vatra, 6.10.2026:
-# "not like Ferro"; one sniff and that's it).
+# Sniffing one spot: slow down with the head lowering (sniff-0), sniff with the head bobbing
+# between the nose on the grass (sniff-5) and one pixel higher (sniff-up), lift the head (sniff-0
+# again). The walk with the nose down (sniff-1 to 4) is not used: no drawing of it looked right,
+# and neither did 1 to 5 spots with a dash between them (Vatra, 6.10.2026: "not like Ferro"; one
+# sniff and that's it).
 SNIFF_TURN = (0.35, 12)  # (seconds, px of ground) of sniff-0, when she slows down and when she lifts her head
 SNIFF_BOBS = 3
 SNIFF_DOWN_S, SNIFF_UP_S, SNIFF_LAST_S = 0.32, 0.14, 0.4  # nose on the grass, head up, last sniff
 
 
-def windows(times: list[tuple[float, float]], period: float) -> str:
-    """display="inline" only within the given (start, end) windows of the loop; a window may
-    start at 0 or end at the end of the loop."""
-    vals, keys = ["none"], [0.0]
-    for a, b in times:
-        if a == 0:
-            vals[-1] = "inline"
-        else:
-            vals.append("inline")
-            keys.append(a)
-        if b < period:
-            vals.append("none")
-            keys.append(b)
-    return discrete("display", vals, keys, period)
-
-
-def run_sniff_scene(meadow: dict, dog_x: int, dog_y: int, ball: bool = False,
-                    run_before: float = RUN_BEFORE) -> str:
-    mw = meadow["width"]
+def sniff() -> Stop:
     turn_s, turn_px = SNIFF_TURN
-    ground_total = GROUND_TILES * mw
-
-    # the timeline: windows of each frame and the path of the ground through them
-    t, d = run_before, run_before * RUN_SPEED
-    ground_pts = [(0, 0), (t, -d)]
-    runs, turns, downs, ups = [(0, t)], [(t, t + turn_s)], [], []  # slows down, the head going down
-    t, d = t + turn_s, d + turn_px
-    ground_pts.append((t, -d))
+    stills: dict[str, list[tuple[float, float]]] = {"n0": [(0, turn_s)], "n5": [], "nu": []}
+    t = turn_s
     for _ in range(SNIFF_BOBS):
-        downs.append((t, t + SNIFF_DOWN_S))
-        ups.append((t + SNIFF_DOWN_S, t + SNIFF_DOWN_S + SNIFF_UP_S))
+        stills["n5"].append((t, t + SNIFF_DOWN_S))
+        stills["nu"].append((t + SNIFF_DOWN_S, t + SNIFF_DOWN_S + SNIFF_UP_S))
         t += SNIFF_DOWN_S + SNIFF_UP_S
-    downs.append((t, t + SNIFF_LAST_S))
+    stills["n5"].append((t, t + SNIFF_LAST_S))
     t += SNIFF_LAST_S
-    ground_pts.append((t, -d))
-    turns.append((t, t + turn_s))  # lifts the head and moves off
-    t, d = t + turn_s, d + turn_px
-    ground_pts.append((t, -d))
-    sniff_start, sniff_end = run_before, t
-    period = sniff_end + (ground_total - d) / RUN_SPEED
-    runs.append((sniff_end, period))
+    stills["n0"].append((t, t + turn_s))  # lifts the head and moves off
+    return Stop(
+        dur=t + turn_s,
+        ground=[(0, 0), (turn_s, turn_px), (t, turn_px), (t + turn_s, 2 * turn_px)],
+        stills=stills,
+        sprites={"n0": "sniff-0.png", "n5": "sniff-5.png", "nu": "sniff-up.png"},
+    )
+
+
+STOPS = {"sit": sit, "sniff": sniff, "walkPoop": walk_poop, "stillPoop": still_poop}
+
+
+def run_head(meadow: dict, stops: dict[str, Stop]) -> str:
+    """The head of every run scene of a background: the meadow and every drawing any stop uses,
+    so all programs of a background share it."""
+    sprites = {f"r{i}": f"run-{i}.png" for i in sorted(set(RUN_ORDER))}
+    for stop in stops.values():
+        sprites |= stop.sprites
+    return svg_head(meadow_defs(meadow) + [sprite_def(id_, f) for id_, f in sprites.items()], meadow)
+
+
+def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, Stop]],
+             ball: bool = False) -> str:
+    """Everything after </defs> of one run, up to and including </svg>: running, a stop after
+    each (seconds of running, stop) of the program, then running on until the loop closes."""
+    mw = meadow["width"]
+    t = d = 0.0  # second of the loop, px the ground has moved
+    ground_pts = [(0.0, 0.0)]
+    stops: list[tuple[float, float]] = []
+    stills: dict[str, list[tuple[float, float]]] = {}
+    cycles: dict[tuple, list[tuple[float, float]]] = {}
+    props: list[tuple[str, float, int, int]] = []
+    for run_s, stop in program:
+        t += run_s
+        d += run_s * RUN_SPEED
+        ground_pts += [(t + s, -(d + x)) for s, x in stop.ground]
+        for id_, ws in stop.stills.items():
+            stills.setdefault(id_, []).extend((t + a, t + b) for a, b in ws)
+        for prefix, frames, frame_s, a, b in stop.cycles:
+            cycles.setdefault((prefix, tuple(frames), frame_s), []).append((t + a, t + b))
+        props += [(id_, t + s, x, y) for id_, s, x, y in stop.props]
+        stops.append((t, t + stop.dur))
+        t += stop.dur
+        d += stop.ground[-1][1]
+    tiles_n = GROUND_TILES
+    while tiles_n * mw - d < FINAL_RUN_MIN_S * RUN_SPEED:
+        tiles_n += GROUND_TILES
+    ground_total = tiles_n * mw
+    period = t + (ground_total - d) / RUN_SPEED
     ground_pts.append((period, -ground_total))
-    back_pts = [(t, x * BACK_RATIO) for t, x in ground_pts]
+
+    back_pts = [(s, x * BACK_RATIO) for s, x in ground_pts]
     y_back = meadow["sky_h"]
     y_ground = meadow["sky_h"] + meadow["back_h"]
-
-    defs = meadow_defs(meadow)
-    defs += [sprite_def(f"r{i}", f"run-{i}.png") for i in sorted(set(RUN_ORDER))]
-    defs += [sprite_def(f"n{i}", f"sniff-{i}.png") for i in (0, 5)]
-    defs += [sprite_def("nu", "sniff-up.png")]
-
     layers = (
         clouds_layer(meadow)
         + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
         + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
     )
-    dog = f'<g>{windows(runs, period)}{cycle("r", RUN_ORDER, RUN_FRAME_S)}</g>'
-    dog += f'<g display="none">{windows(turns, period)}<use href="#n0"/></g>'
-    dog += f'<g display="none">{windows(downs, period)}<use href="#n5"/></g>'
-    dog += f'<g display="none">{windows(ups, period)}<use href="#nu"/></g>'
 
-    height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
-    ball_el = ball_layer(ground_pts, sniff_start, sniff_end, period, dog_x, dog_y) if ball else ""
-    body = layers + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
-    return svg(body, defs, meadow, height)
+    # what she leaves on the meadow: placed where the ground is when it appears, then it scrolls
+    # with the ground
+    left = "".join(
+        f'<use href="#{id_}" x="{round(dog_x + x - at(ground_pts, s))}" y="{dog_y + y}" display="none">'
+        + discrete("display", ["none", "inline"], [0, s], period)
+        + "</use>"
+        for id_, s, x, y in props
+    )
+    left_el = f"<g>{linear(ground_pts, period)}{left}</g>" if left else ""
+
+    # running: its own fast cycle, the whole group hidden at every stop
+    runs = list(zip([0.0] + [b for _, b in stops], [a for a, _ in stops] + [period]))
+    dog = f'<g>{windows(runs, period)}{cycle("r", RUN_ORDER, RUN_FRAME_S)}</g>'
+    for id_, ws in stills.items():
+        dog += f'<g display="none">{windows(ws, period)}<use href="#{id_}"/></g>'
+    for (prefix, frames, frame_s), ws in cycles.items():
+        dog += f'<g display="none">{windows(ws, period)}{cycle(prefix, list(frames), frame_s)}</g>'
+
+    ball_el = ball_layer(ground_pts, stops, period, dog_x, dog_y) if ball else ""
+    return layers + left_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g></svg>'
+
+
+# The orange ball she chases: it bounces ahead of her while she runs, rolls on and comes to
+# rest on the grass at every stop, and pops up again when she reaches it.
+BALL_BOUNCE_S = 0.55  # one bounce, roughly
+BALL_BOUNCE_H = 14  # px
+BALL_GAP = (8, 52)  # px between her nose and the ball while she chases it, nearest and farthest
+BALL_GAP_S = 3.7  # seconds of one swing from near to far and back
+BALL_ROLL_MIN = 40  # px the ball rolls on at least when she stops
+BALL_ROLL_S = 1.2
+NOSE_X = 58  # x of her nose on the run canvas
+
+
+def ball_layer(ground_pts: list, stops: list[tuple[float, float]], period: float, dog_x: int,
+               dog_y: int) -> str:
+    """The ball through the whole loop. At each (stop, go) it rolls on far enough that she
+    reaches it just as she runs again (or BALL_ROLL_MIN, if she would reach it sooner), and lies
+    on the meadow until she reaches it."""
+    d = size("ball.png")[0]
+    top = dog_y + size("run-0.png")[1] - d  # the ball's top when it lies on the grass
+    nose = dog_x + NOSE_X
+    mid, amp = (BALL_GAP[0] + BALL_GAP[1]) / 2, (BALL_GAP[1] - BALL_GAP[0]) / 2
+    reaches: list[float] = []
+
+    def swing(t: float) -> float:
+        return mid + amp * math.sin(2 * math.pi * t / BALL_GAP_S)
+
+    def gap(t: float) -> float:
+        """Her nose to the ball while she chases it: the swing, growing out of her nose for a
+        second after she reaches it, and back to where the loop starts in the last second."""
+        reached = [r for r in reaches if r <= t]
+        g = swing(t) if not reached else 2 + (swing(t) - 2) * min(1.0, (t - reached[-1]) / 1.0)
+        if t > period - 1:
+            g += (swing(0) - g) * (t - (period - 1))
+        return g
+
+    rests = []
+    for i, (stop, go) in enumerate(stops):
+        x_stop = nose + gap(stop)
+        moved = at(ground_pts, go) - at(ground_pts, stop)  # negative: the ground moves left
+        roll = max(BALL_ROLL_MIN, nose + 2 - x_stop - moved)
+        reach = go
+        while reach < period and x_stop + roll + at(ground_pts, reach) - at(ground_pts, stop) > nose + 2:
+            reach += 0.01
+        assert reach < (stops[i + 1][0] if i + 1 < len(stops) else period), "she reaches the ball too late"
+        reaches.append(reach)
+        rests.append((stop, reach, x_stop, roll))
+    chase = list(zip([0.0] + reaches, [a for a, _ in stops] + [period]))
+
+    xs = []
+    for a, b in chase:
+        t = a
+        while t < b:
+            xs.append((t, nose + gap(t)))
+            t += 0.5
+        xs.append((b, nose + gap(b)))
+
+    # bounces: a whole number in each window, so the ball is on the grass when it stops and
+    # when it pops up again
+    keys = [(0.0, 0)]
+    for a, b in chase:
+        if keys[-1][0] < a:
+            keys.append((a, 0))
+        n = max(1, round((b - a) / BALL_BOUNCE_S))
+        for i in range(n):
+            t0 = a + (b - a) * i / n
+            keys += [(t0 + (b - a) / n / 2, -BALL_BOUNCE_H), (t0 + (b - a) / n, 0)]
+    up, down, flat = "0 0 .58 1", ".42 0 1 1", "0 0 1 1"
+    splines = [up if y1 < y0 else down if y1 > y0 else flat for (_, y0), (_, y1) in zip(keys, keys[1:])]
+    bounce = (
+        f'<animateTransform attributeName="transform" type="translate" '
+        f'values="{";".join(f"0 {y}" for _, y in keys)}" '
+        f'keyTimes="{";".join(key(t, period) for t, _ in keys)}" calcMode="spline" '
+        f'keySplines="{";".join(splines)}" dur="{fmt(period)}s" repeatCount="indefinite"/>'
+    )
+    chased = (
+        f"<g>{windows(chase, period)}<g>{linear(xs, period)}<g>{bounce}"
+        f'<use href="#ball" x="0" y="{top}"/></g></g></g>'
+    )
+
+    # lying on the meadow: placed where the ground is when she stops, rolls on, then scrolls with
+    # the ground until she reaches it
+    resting = ""
+    for stop, reach, x_stop, roll in rests:
+        roll_pts = [(0, 0), (stop, 0), (stop + BALL_ROLL_S / 2, roll * 0.75), (stop + BALL_ROLL_S, roll),
+                    (period, roll)]
+        resting += (
+            f'<g display="none">{windows([(stop, reach)], period)}<g>{linear(roll_pts, period)}'
+            f'<use href="#ball" x="{round(x_stop - at(ground_pts, stop))}" y="{top}"/></g></g>'
+        )
+    resting = f"<g>{linear(ground_pts, period)}{resting}</g>"
+    # its own <defs>, so the scene with the ball is the plain scene with this one piece inserted
+    return f'<defs>{sprite_def("ball", "ball.png")}</defs>' + chased + resting
+
+
+def draw_programs(rng: random.Random, stops: dict[str, Stop]) -> list[list[tuple[float, str]]]:
+    """PROGRAMS runs, each a list of (seconds of running before the stop, kind of stop)."""
+    firsts = [kind for kind, w in WEIGHTS.items() for _ in range(round(w * PROGRAMS))]
+    assert len(firsts) == PROGRAMS, "the WEIGHTS shares must come out whole in PROGRAMS"
+    programs = []
+    for kind in firsts:
+        program, t, pooped = [(RUN_BEFORE, kind)], RUN_BEFORE + stops[kind].dur, kind in POOPS
+        while True:
+            run_s = round(rng.uniform(*GAP_S), 1)
+            if t + run_s >= PROGRAM_S:
+                break
+            kinds = [k for k in WEIGHTS if k != kind and not (pooped and k in POOPS)]
+            kind = rng.choices(kinds, [WEIGHTS[k] for k in kinds])[0]
+            pooped = pooped or kind in POOPS
+            program.append((run_s, kind))
+            t += run_s + stops[kind].dur
+        programs.append(program)
+    return programs
+
+
+def describe(program: list[tuple[float, str]], stops: dict[str, Stop]) -> str:
+    """'sits at 16 s, sniffs at 41 s, ...': the second of the run each stop starts."""
+    out, t = [], 0.0
+    for run_s, kind in program:
+        t += run_s
+        out.append(f"{SAYS[kind]} at {round(t)} s")
+        t += stops[kind].dur
+    return ", ".join(out)
 
 
 def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
@@ -585,46 +579,100 @@ def sleep_scene(meadow: dict, dog_x: int, dog_y: int) -> str:
             f'dur="{fmt(zdur)}s" begin="{fmt(intro + k)}s" repeatCount="indefinite"/></g>'
         )
 
-    height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
     layers = (
         clouds_layer(meadow)
         + f"<g>{tiles('back', meadow['sky_h'], mw, 0)}</g>"
         + f"<g>{tiles('ground', meadow['sky_h'] + meadow['back_h'], mw, 0)}</g>"
     )
     body = layers + f'<g transform="translate({dog_x} {dog_y})">{dog}{zs}</g>'
-    return svg(body, defs, meadow, height)
+    return svg_head(defs, meadow) + body + "</svg>"
+
+
+def with_ball_piece(plain: str, with_ball: str) -> tuple[str, int]:
+    """The ball as a piece of the plain scene: (piece, index where it goes)."""
+    at_ = next(i for i, (a, b) in enumerate(zip(plain, with_ball)) if a != b)
+    piece = with_ball[at_ : at_ + len(with_ball) - len(plain)]
+    assert plain[:at_] + piece + plain[at_:] == with_ball
+    return piece, at_
+
+
+PROGRAMS_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ferro - programs</title>
+<style>
+  body {{ font: 14px system-ui, sans-serif; background: #2a2a2a; color: #ddd; margin: 16px; }}
+  h2 {{ font-size: 14px; font-weight: 600; margin: 18px 0 6px; }}
+  p {{ margin: 0 0 12px; color: #aaa; }}
+  .band {{ width: 720px; height: 164px; overflow: hidden; border: 1px solid #555; }}
+  .band img {{ height: 164px; width: 100%; display: block; }}
+</style>
+</head>
+<body>
+  <p>The {n} programs of the summer meadow (generated by tools/scene.py, not committed). The mod
+  plays one per turn, on any meadow; every other one here chases the ball. The band shows the
+  run from its start, 20 s into a turn, and a turn sleeps after 160 s of it. Reload the page to
+  watch from the start again.</p>
+{bands}
+</body>
+</html>
+"""
 
 
 def main() -> None:
     dog_w, dog_h = size("run-0.png")
     preview = ROOT / "preview"
     preview.mkdir(exist_ok=True)
+    stops = {kind: make() for kind, make in STOPS.items()}
+    rng = random.Random(SEED)
     scenes = []
     for k, (name, place) in enumerate(BACKGROUNDS.items()):
         meadow = json.loads((PX / f"{name}.json").read_text()) | {"name": name}
         height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
         dog_x = VW // 2 - dog_w // 2 - 20
         dog_y = height - dog_h - 2
-        # running: she sits and looks at the viewer, sniffs a spot, poops while walking, or (rarely)
-        # poops in one spot; each comes plain and with the ball, which the mod inserts at `ballAt`
-        # when it wants it
+        head = run_head(meadow, stops)
         prefix = "" if k == 0 else f"{name}-"
-        runs = {}
-        for key, make, file in (("run", run_walk_scene, "run"), ("runStill", run_scene, "run-still"),
-                                ("runSit", run_sit_scene, "sit"), ("runSniff", run_sniff_scene, "sniff")):
-            plain, with_ball = make(meadow, dog_x, dog_y), make(meadow, dog_x, dog_y, ball=True)
-            at = next(i for i, (a, b) in enumerate(zip(plain, with_ball)) if a != b)
-            piece = with_ball[at : at + len(with_ball) - len(plain)]
-            assert plain[:at] + piece + plain[at:] == with_ball
-            runs[key] = {"svg": plain, "ball": piece, "ballAt": at}
-            (preview / f"{prefix}{file}.svg").write_text(plain, encoding="utf-8")
-            (preview / f"{prefix}ball-{file}.svg").write_text(with_ball, encoding="utf-8")
-            print(name, key, len(plain), "with the ball", len(with_ball), "chars; limit 131072")
+
+        # one stop per scene, for the README and for looking at one kind of stop
+        for kind, file in (("walkPoop", "run"), ("stillPoop", "run-still"), ("sit", "sit"), ("sniff", "sniff")):
+            program = [(RUN_BEFORE, stops[kind])]
+            (preview / f"{prefix}{file}.svg").write_text(head + run_body(meadow, dog_x, dog_y, program),
+                                                         encoding="utf-8")
+            (preview / f"{prefix}ball-{file}.svg").write_text(
+                head + run_body(meadow, dog_x, dog_y, program, ball=True), encoding="utf-8")
+
+        # the programs: the mod plays one per turn; the ball is a piece it inserts at `ballAt`
+        programs, bands, largest = [], [], 0
+        for i, drawn in enumerate(draw_programs(rng, stops)):
+            program = [(run_s, stops[kind]) for run_s, kind in drawn]
+            plain = run_body(meadow, dog_x, dog_y, program)
+            with_ball = run_body(meadow, dog_x, dog_y, program, ball=True)
+            piece, ball_at = with_ball_piece(plain, with_ball)
+            programs.append({"body": plain, "ball": piece, "ballAt": ball_at})
+            largest = max(largest, len(head) + len(with_ball))
+            if k == 0:
+                file, says = f"program-{i}.svg", describe(drawn, stops)
+                print(f"  program {i}: {says}")
+                if i % 2:
+                    file, says = f"ball-{file}", f"with the ball: {says}"
+                (preview / file).write_text(head + (with_ball if i % 2 else plain), encoding="utf-8")
+                bands.append(f'  <h2>Program {i}: {html.escape(says)}</h2>\n'
+                             f'  <div class="band"><img src="{file}" alt="Ferro, program {i}"></div>')
+        assert largest <= SVG_LIMIT, f"{name}: a program with the ball is {largest} chars"
+        print(f"{name}: head {len(head)} chars, {len(programs)} programs, largest with the ball "
+              f"{largest} of {SVG_LIMIT}")
+        if k == 0:
+            (preview / "programs.html").write_text(PROGRAMS_PAGE.format(n=len(programs), bands="\n".join(bands)),
+                                                   encoding="utf-8")
+
         sleep = sleep_scene(meadow, dog_x, dog_y)
         (preview / f"{prefix}sleep.svg").write_text(sleep, encoding="utf-8")
         print(name, "sleep", len(sleep), "chars", "" if name in IN_MOD else "(preview only, not in the mod)")
         if name in IN_MOD:
-            scenes.append({"place": place, "height": height * SCALE, **runs, "sleep": sleep})
+            scenes.append({"place": place, "height": height * SCALE, "head": head, "programs": programs,
+                           "sleep": sleep})
 
     ts = (
         "// Generated by tools/scene.py - do not edit by hand.\n"
@@ -632,6 +680,7 @@ def main() -> None:
         f"export const SCENES = {json.dumps(scenes)}\n"
     )
     (ROOT / "plugin" / "hooks" / "scene.ts").write_text(ts, encoding="utf-8")
+    print("scene.ts", len(ts), "chars")
 
 
 if __name__ == "__main__":

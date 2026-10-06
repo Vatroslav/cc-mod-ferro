@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
 
-import type { FerroPhase, RunVariant } from '../types'
+import type { FerroPhase } from '../types'
 import { SCENE_MAX_WIDTH, SCENES } from './scene'
 
 // Ferro comes out only when a turn lasts longer than this, so short answers do not flash the band.
@@ -9,20 +9,15 @@ const RUN_AFTER_MS = 20_000
 // When Claude works for too long, Ferro lies down and falls asleep.
 const SLEEP_AFTER_MS = 180_000
 const PX_PER_COLUMN = 8
-// Each turn she sits and looks at the viewer, sniffs a spot, poops while walking, or poops in one
-// spot (Vatra: 50-20-20-10 since sniffing came in, before 60-30-10). The real Ferro rarely stops to poop
-// in one spot.
-const SIT_SHARE = 0.5
-const SNIFF_SHARE = 0.2
-const WALK_POOP_SHARE = 0.2
 // In about a third of the turns she chases an orange ball.
 const BALL_SHARE = 1 / 3
 
 const phase = atom({ plugin: 'cc-mod-ferro', key: 'phase' } as const, null as FerroPhase)
 // This turn's background, an index into SCENES: picked at random on every turn.
 const scene = atom({ plugin: 'cc-mod-ferro', key: 'scene' } as const, 0)
-// Which run this turn has: sitting, sniffing, pooping while walking or pooping in one spot, picked per turn.
-const variant = atom({ plugin: 'cc-mod-ferro', key: 'variant' } as const, 'run' as RunVariant)
+// This turn's run, an index into the background's programs, also picked per turn. A program is a
+// run with its stops (sitting, sniffing, pooping), drawn in tools/scene.py: SMIL has no randomness.
+const program = atom({ plugin: 'cc-mod-ferro', key: 'program' } as const, 0)
 // Whether she chases the ball this turn, also picked per turn.
 const ball = atom({ plugin: 'cc-mod-ferro', key: 'ball' } as const, false)
 
@@ -36,13 +31,9 @@ export const register: Register = on => {
   on('turn.start', async ($, e, next) => {
     cancelTimers()
     await update($, phase, () => null)
-    await update($, scene, () => Math.floor(Math.random() * SCENES.length))
-    await update($, variant, () => {
-      const r = Math.random()
-      if (r < SIT_SHARE) return 'runSit'
-      if (r < SIT_SHARE + SNIFF_SHARE) return 'runSniff'
-      return r < SIT_SHARE + SNIFF_SHARE + WALK_POOP_SHARE ? 'run' : 'runStill'
-    })
+    const background = Math.floor(Math.random() * SCENES.length)
+    await update($, scene, () => background)
+    await update($, program, () => Math.floor(Math.random() * SCENES[background].programs.length))
     await update($, ball, () => Math.random() < BALL_SHARE)
     timers = [
       $.clock.after(RUN_AFTER_MS, () => void update($, phase, () => 'run')),
@@ -79,10 +70,11 @@ export const register: Register = on => {
 
     const { Box, Svg } = $.ui.resolve(e)
     const s = SCENES[await read($, scene)] ?? SCENES[0]
-    const r = s[await read($, variant)]
+    const p = s.programs[await read($, program)] ?? s.programs[0]
     const withBall = await read($, ball)
-    // the ball is a piece of SVG inserted into the plain scene
-    const run = withBall ? r.svg.slice(0, r.ballAt) + r.ball + r.svg.slice(r.ballAt) : r.svg
+    // every program of a background shares the head (the meadow and all drawings); the ball is a
+    // piece of SVG inserted into the program's body
+    const run = s.head + (withBall ? p.body.slice(0, p.ballAt) + p.ball + p.body.slice(p.ballAt) : p.body)
     const runAlt = withBall ? `Ferro chasing an orange ball across ${s.place}` : `Ferro running across ${s.place}`
 
     // Without an explicit width the frame stays at 300 px. Desktop counts the band in columns
