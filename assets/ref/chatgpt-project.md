@@ -81,3 +81,24 @@ Rules for this sheet:
 - For her face seen from the front, use the attached photos of the real Ferro: pale wheaten face with a lighter, scruffy muzzle, dark round eyes with one white highlight pixel each, black nose, large erect pointed ears with warm orange-brown inside. Keep the coat pattern from the reference: grey-black saddle on the back, wheaten chest and legs.
 - Use only the colours from the palette in the reference.
 ```
+
+## Message for sniffing (written 6.10.2026, not drawn yet)
+
+Attach `ferro-ref.png`; save the result as `assets/src/sniff.png`. The scene plan: she slows out of a run (frame 1), walks slowly with her nose to the grass (frames 2-5, a walk cycle like `poop-walk.png`), stops and sniffs one spot (frame 6), lifts her head (frame 1 played backwards) and runs on. The nose twitch while she sniffs is derived in `build.py` from frame 6, not drawn by ChatGPT: it redraws every frame from scratch, so a subtle movement drawn by it makes the dog tremble.
+
+```text
+Sprite sheet: Ferro sniffing the ground. 6 frames, left to right:
+1. Slowing from a run to a walk, mid-step, head lowering towards the ground.
+2. Walking slowly forward with her nose close to the ground: head low and stretched forward, the nose just above the ground line, back level, tail up. Front left paw and hind right paw step forward.
+3. The same, legs passing under the body.
+4. The same, front right paw and hind left paw step forward.
+5. The same, legs passing under the body.
+6. Standing still on all four paws, sniffing one spot: nose touching the ground line, ears pointing forward, tail up.
+
+Rules for this sheet:
+- In frames 2 to 6 the head, back and tail are identical, in the same position and at the same height. Only the legs move (in frame 6 the nose is a little lower, touching the ground).
+- Mouth closed in every frame, no tongue.
+- Same scale as the frames in the reference: standing, she is about 40 pixels from ear tips to paws and about 55 pixels long, with her head the same size as in the reference. Do not draw her bigger.
+- All 6 frames stand on the same ground line. No grass, no ground, no shadow and no object under her nose: the ground is in the scene.
+- Use only the colours from the palette in the reference.
+```
