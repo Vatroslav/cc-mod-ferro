@@ -48,7 +48,7 @@ The reference sheet above goes into every ChatGPT request for new frames, so new
 - The loop is seamless: in one loop the ground travels exactly 20 meadow widths and the hills, at 0.35 of the ground speed, exactly 7.
 - ChatGPT returned the gallop frames out of phase order, which made Ferro look like she was running backwards. The real order is `[4, 3, 2, 5, 0]`.
 
-**The mod.** `plugin/hooks/register.tsx` starts two timers on `turn.start` (20 s to run, 3 min to sleep) and picks the turn's meadow, running scene (60-30-10) and ball (one in three), keeping all of it in `$.state`. The timers are cleared on the main turn's `turn.complete`. The band is drawn with a `ui.render` hook on `AbovePrompt`, only on the desktop surface.
+**The mod.** `plugin/hooks/register.tsx` starts two timers on `turn.start` (20 s to run, 3 min to sleep) and picks the turn's meadow, running scene (60-30-10) and ball (one in three), keeping all of it in `$.state`. The timers are cleared on the main turn's `turn.complete`. The band is drawn with a `ui.render` hook on `AbovePrompt`, only on the desktop surface. Ferro is only a pastime, so she gives the band up to any other mod that has something to show there (the files a delete prompt is about, for one): the hook asks the plugins beneath first and draws only when the band would otherwise be empty.
 
 ## Install
 

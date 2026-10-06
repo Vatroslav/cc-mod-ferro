@@ -65,6 +65,13 @@ export const register: Register = on => {
     if (now === null) {
       return next(e)
     }
+    // Ferro is only a pastime, so any band drawn beneath her (the files a delete prompt is about,
+    // background tasks) goes first and she waits. `{ type: 'engine' }` is the engine's own band,
+    // which is empty: nobody beneath has anything to show.
+    const beneath = await next(e)
+    if (beneath.type !== 'engine') {
+      return beneath
+    }
 
     const { Box, Svg } = $.ui.resolve(e)
     const s = SCENES[await read($, scene)] ?? SCENES[0]
