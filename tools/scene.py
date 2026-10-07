@@ -45,6 +45,10 @@ RUN_BEFORE = 16.0  # seconds of running before the first stop
 GROUND_TILES = 20
 BACK_RATIO = 0.35
 FINAL_RUN_MIN_S = 12.0  # at least this much running after the last stop, before the loop starts again
+# Running on from a standstill (after sitting): (second, px) the ground has moved since she set off,
+# full speed after the last point. Her run frames slide back from where she stood meanwhile, so she
+# never moves backwards against the grass (Vatra chose this of four variants, 7.10.2026).
+RUN_START = [(0.0, 0.0), (0.25, 6.0), (0.5, 20.0)]
 
 # Programs: what Ferro does on one turn's run and when. The run lasts at most 160 s (from 20 s into
 # the turn to 3 min, when she falls asleep), so the stops start within PROGRAM_S and a turn ends
@@ -230,7 +234,10 @@ class Stop:
     `props`: what she leaves on the meadow, (sprite id, second it appears, x, y on her canvas).
     `front`: what lies on the meadow in front of her and scrolls with the ground, (sprite id, x, y
     on her canvas at second `at`, at, windows in which it shows); a window may start before the
-    stop, while she still runs."""
+    stop, while she still runs.
+    `run_from`: px right of the run frames where she stands at the end of the stop. If set, she
+    runs on from a standstill: the run starts there and slides back to its place while the ground
+    speeds up (RUN_START)."""
     dur: float
     ground: list[tuple[float, float]]
     stills: dict[str, list[tuple[float, float]]]
@@ -238,6 +245,7 @@ class Stop:
     cycles: list[tuple[str, list, float, float, float]] = field(default_factory=list)
     props: list[tuple[str, float, int, int]] = field(default_factory=list)
     front: list[tuple[str, int, int, float, list[tuple[float, float]]]] = field(default_factory=list)
+    run_from: int = 0
 
 
 def sequence(frames: list[tuple[str, float]]) -> tuple[dict[str, list[tuple[float, float]]], float]:
@@ -302,21 +310,25 @@ def walk_poop() -> Stop:
 
 
 # Sitting and looking at the viewer: brake, sit, turn the head to the viewer, blink and tilt the
-# head, turn back, stand up. The frames are sit.png (0 brake, 1 sitting down, 2 sitting in
-# profile, 3 head three-quarters, 4 facing the viewer, 5 head tilt) and sit-blink.png, derived
-# from 4.
+# head, turn back, get up, stand on all fours and run on from there (Vatra, 7.10.2026: she went
+# from half sitting straight into a full gallop). The frames are sit.png (0 brake, 1 sitting down,
+# 2 sitting in profile, 3 head three-quarters, 4 facing the viewer, 5 head tilt), sit-blink.png,
+# derived from 4, and sit-up.png, standing, derived from poop-0.
 SIT = [(0, 0.3), (1, 0.3), (2, 0.5), (3, 0.3), (4, 1.6), ("blink", 0.15), (4, 1.2), (5, 1.4),
-       (4, 1.0), ("blink", 0.15), (4, 0.6), (3, 0.3), (2, 0.4), (1, 0.3)]  # (frame, seconds)
+       (4, 1.0), ("blink", 0.15), (4, 0.6), (3, 0.3), (2, 0.4), (1, 0.3), ("up", 0.35)]  # (frame, seconds)
 BRAKE_PX = 10  # how far the ground still moves while she brakes
 
 
 def sit() -> Stop:
     stills, t = sequence([(f"s{f}", s) for f, s in SIT])
+    # sit-up is poop-0 moved right to where she sat; the run starts there
+    stand_x = Image.open(PX / "sit-up.png").getbbox()[0] - Image.open(PX / "poop-0.png").getbbox()[0]
     return Stop(
         dur=t,
         ground=[(0, 0), (SIT[0][1], BRAKE_PX), (t, BRAKE_PX)],
         stills=stills,
         sprites={f"s{f}": f"sit-{f}.png" for f, _ in SIT},
+        run_from=stand_x,
     )
 
 
@@ -400,6 +412,8 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
     mw = meadow["width"]
     t = d = 0.0  # second of the loop, px the ground has moved
     ground_pts = [(0.0, 0.0)]
+    shift_pts = [(0.0, 0.0)]  # px her run frames lie right of their place, after a stop with run_from
+    start_s = start_px = 0.0  # the run after the last stop sets off from a standstill over this
     stops: list[tuple[float, float]] = []
     stills: dict[str, list[tuple[float, float]]] = {}
     cycles: dict[tuple, list[tuple[float, float]]] = {}
@@ -407,7 +421,7 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
     fronts: list[tuple[str, int, int, float, list[tuple[float, float]]]] = []
     for run_s, stop in program:
         t += run_s
-        d += run_s * RUN_SPEED
+        d += start_px + (run_s - start_s) * RUN_SPEED
         ground_pts += [(t + s, -(d + x)) for s, x in stop.ground]
         for id_, ws in stop.stills.items():
             stills.setdefault(id_, []).extend((t + a, t + b) for a, b in ws)
@@ -418,12 +432,17 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
         stops.append((t, t + stop.dur))
         t += stop.dur
         d += stop.ground[-1][1]
+        start_s, start_px = RUN_START[-1] if stop.run_from else (0.0, 0.0)
+        if stop.run_from:
+            ground_pts += [(t + s, -(d + x)) for s, x in RUN_START[1:]]
+            shift_pts += [(t - stop.dur, 0), (t, stop.run_from), (t + start_s, 0)]
     tiles_n = GROUND_TILES
     while tiles_n * mw - d < FINAL_RUN_MIN_S * RUN_SPEED:
         tiles_n += GROUND_TILES
     ground_total = tiles_n * mw
-    period = t + (ground_total - d) / RUN_SPEED
+    period = t + start_s + (ground_total - d - start_px) / RUN_SPEED
     ground_pts.append((period, -ground_total))
+    shift_pts.append((period, 0))
 
     back_pts = [(s, x * BACK_RATIO) for s, x in ground_pts]
     y_back = meadow["sky_h"]
@@ -444,9 +463,11 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
     )
     left_el = f"<g>{linear(ground_pts, period)}{left}</g>" if left else ""
 
-    # running: its own fast cycle, the whole group hidden at every stop
+    # running: its own fast cycle, the whole group hidden at every stop (and moved only while it is
+    # hidden or setting off from a standstill)
     runs = list(zip([0.0] + [b for _, b in stops], [a for a, _ in stops] + [period]))
-    dog = f'<g>{windows(runs, period)}{cycle("r", RUN_ORDER, RUN_FRAME_S)}</g>'
+    shift = linear(shift_pts, period) if len(shift_pts) > 2 else ""
+    dog = f'<g>{windows(runs, period)}{shift}{cycle("r", RUN_ORDER, RUN_FRAME_S)}</g>'
     for id_, ws in stills.items():
         dog += f'<g display="none">{windows(ws, period)}<use href="#{id_}"/></g>'
     for (prefix, frames, frame_s), ws in cycles.items():
@@ -461,7 +482,7 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
     )
     front_el = f"<g>{linear(ground_pts, period)}{front}</g>" if front else ""
 
-    ball_el = ball_layer(ground_pts, stops, period, dog_x, dog_y) if ball else ""
+    ball_el = ball_layer(ground_pts, shift_pts, stops, period, dog_x, dog_y) if ball else ""
     return (layers + left_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
             + front_el + "</svg>")
 
@@ -477,14 +498,18 @@ BALL_ROLL_S = 1.2
 NOSE_X = 58  # x of her nose on the run canvas
 
 
-def ball_layer(ground_pts: list, stops: list[tuple[float, float]], period: float, dog_x: int,
-               dog_y: int) -> str:
+def ball_layer(ground_pts: list, shift_pts: list, stops: list[tuple[float, float]], period: float,
+               dog_x: int, dog_y: int) -> str:
     """The ball through the whole loop. At each (stop, go) it rolls on far enough that she
     reaches it just as she runs again (or BALL_ROLL_MIN, if she would reach it sooner), and lies
-    on the meadow until she reaches it."""
+    on the meadow until she reaches it. `shift_pts`: how far right of their place her run frames
+    are, when she sets off from a standstill."""
     d = size("ball.png")[0]
     top = dog_y + size("run-0.png")[1] - d  # the ball's top when it lies on the grass
-    nose = dog_x + NOSE_X
+
+    def nose(t: float) -> float:
+        return dog_x + NOSE_X + at(shift_pts, t)
+
     mid, amp = (BALL_GAP[0] + BALL_GAP[1]) / 2, (BALL_GAP[1] - BALL_GAP[0]) / 2
     reaches: list[float] = []
 
@@ -502,11 +527,11 @@ def ball_layer(ground_pts: list, stops: list[tuple[float, float]], period: float
 
     rests = []
     for i, (stop, go) in enumerate(stops):
-        x_stop = nose + gap(stop)
+        x_stop = nose(stop) + gap(stop)
         moved = at(ground_pts, go) - at(ground_pts, stop)  # negative: the ground moves left
-        roll = max(BALL_ROLL_MIN, nose + 2 - x_stop - moved)
+        roll = max(BALL_ROLL_MIN, nose(go) + 2 - x_stop - moved)
         reach = go
-        while reach < period and x_stop + roll + at(ground_pts, reach) - at(ground_pts, stop) > nose + 2:
+        while reach < period and x_stop + roll + at(ground_pts, reach) - at(ground_pts, stop) > nose(reach) + 2:
             reach += 0.01
         assert reach < (stops[i + 1][0] if i + 1 < len(stops) else period), "she reaches the ball too late"
         reaches.append(reach)
@@ -517,9 +542,9 @@ def ball_layer(ground_pts: list, stops: list[tuple[float, float]], period: float
     for a, b in chase:
         t = a
         while t < b:
-            xs.append((t, nose + gap(t)))
+            xs.append((t, nose(t) + gap(t)))
             t += 0.5
-        xs.append((b, nose + gap(b)))
+        xs.append((b, nose(b) + gap(b)))
 
     # bounces: a whole number in each window, so the ball is on the grass when it stops and
     # when it pops up again

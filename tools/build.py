@@ -519,6 +519,22 @@ def sniff_bob(palette: np.ndarray, dark: set, outline: int) -> None:
     print("sniff-up from", SNIFF_FROM, "columns", SNIFF_HEAD_X, "and right")
 
 
+# Standing up from sitting: she stands on all fours before she runs on (Vatra, 7.10.2026), with
+# the standing frame of pooping in one spot. The sit frames lie further right than the others
+# (aligned on the front toes), so it is moved right until its head is where her head was in
+# sit-1, the last sitting frame; scene.py starts the run from there.
+SIT_UP_FROM = "poop-0"
+SIT_UP_DX = 8
+
+
+def sit_up() -> None:
+    src = Image.open(OUT / f"{SIT_UP_FROM}.png").convert("RGBA")
+    out = Image.new("RGBA", src.size)
+    out.paste(src, (SIT_UP_DX, 0))
+    out.save(OUT / "sit-up.png")
+    print("sit-up from", SIT_UP_FROM, "moved", SIT_UP_DX)
+
+
 # Lapping water: drink-lap.png (ChatGPT, 7.10.2026) has four frames of Ferro drinking with the red
 # bowl drawn in, and the drops flying out beside it as figures of their own. The bowl and the water
 # are not dog colours: they get a palette of their own (LAP_PROP_COLORS, median cut over them),
@@ -799,6 +815,7 @@ def main() -> None:
     lap(palette, tongue_n, dark, outline)
     blink(palette, dark, outline)
     sniff_bob(palette, dark, outline)
+    sit_up()
 
 
 if __name__ == "__main__":
