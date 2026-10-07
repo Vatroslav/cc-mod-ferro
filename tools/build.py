@@ -532,15 +532,19 @@ def sniff_bob(palette: np.ndarray, dark: set, outline: int) -> None:
 # body is still while she drinks). Every frame therefore has the body and the bowl of frame
 # LAP_BASE and its own head (Vatra: a head from every frame, one body): the frame is laid on the
 # base by the silhouette of the body (it sat 1-2 pixels off against the bowl, the head did not move
-# against the body), and every pixel of it right of LAP_SEAM_X that is not the bowl goes on top.
-# The bowl is its own colours plus the dark outline next to them, from the row above the rim down.
+# against the body), and only its head goes on top: right of LAP_HEAD_X down to LAP_NECK_Y, and the
+# muzzle right of LAP_CHIN_X down to the bowl, plus the tongue that reaches into the bowl from her
+# mouth. A straight seam took the front leg and the end of the bowl along with the head, so they
+# moved with it (Vatra, 7.10.2026). The bowl is everything inside its outline from the row above
+# the rim down, but that tongue: the pink highlights on its rim took tongue colours.
 LAP = "drink-lap"
 LAP_FACTOR = 7.5  # her height (tail tip to paws, 305 source pixels) and length between drink and run
 LAP_BOWL_X = 72
 LAP_CANVAS_H = CANVAS_H + 4
 LAP_PROP_COLORS = 10
 LAP_BASE = 3
-LAP_SEAM_X = 50  # left of it: tail, back, legs; right of it: the head (the bowl starts here too)
+LAP_HEAD_X, LAP_NECK_Y = 50, 31  # the head and neck, above the front leg
+LAP_CHIN_X = 54  # the muzzle below that, right of the front leg and the end of the bowl
 
 
 def shifted(a: np.ndarray, dx: int, dy: int, fill: int) -> np.ndarray:
@@ -617,33 +621,37 @@ def lap(palette: np.ndarray, tongue_n: int, dark: set, outline: int) -> None:
         placed.append((box, x, y))
         print(LAP, n, "size", px.shape[1], "x", px.shape[0], "at", x, y, "bowl bottom row", y + int(np.where(is_prop.any(1))[0].max()))
 
-    def bowl_of(a: np.ndarray) -> np.ndarray:
-        """Everything inside the bowl's outline, from the row above its rim down, but the tongue
-        that reaches into it from her mouth (the pink highlights on the rim took tongue colours)."""
-        own = np.isin(a, list(props))
-        top = int(np.where(own.any(1))[0].min()) - 1
-        region = ndimage.binary_fill_holes(ndimage.binary_dilation(own, np.ones((3, 3)))) & (a != transparent)
-        region[:top] = False
+    def bowl_top(a: np.ndarray) -> int:
+        return int(np.where(np.isin(a, list(props)).any(1))[0].min()) - 1
+
+    def mouth_tongue(a: np.ndarray) -> np.ndarray:
+        """The tongue patches that start above the bowl, at her mouth."""
         lab, k = ndimage.label(np.isin(a, list(tongue_ids)))
-        mouth = [i for i in range(1, k + 1) if np.where(lab == i)[0].min() < top + 1]
-        return region & ~np.isin(lab, mouth)
+        return np.isin(lab, [i for i in range(1, k + 1) if np.where(lab == i)[0].min() <= bowl_top(a)])
+
+    def bowl_of(a: np.ndarray) -> np.ndarray:
+        own = np.isin(a, list(props))
+        region = ndimage.binary_fill_holes(ndimage.binary_dilation(own, np.ones((3, 3)))) & (a != transparent)
+        region[: bowl_top(a)] = False
+        return region & ~mouth_tongue(a)
 
     base = canvases[LAP_BASE]
     base_bowl = bowl_of(base)
     cols = np.arange(CANVAS_W)[None, :]
-    body = (base != transparent) & ~base_bowl & (cols < LAP_SEAM_X)
+    rows = np.arange(LAP_CANVAS_H)[:, None]
+    head_area = (((cols >= LAP_HEAD_X) & (rows <= LAP_NECK_Y))
+                 | ((cols >= LAP_CHIN_X) & (rows <= bowl_top(base))))
     for n, a in enumerate(canvases):
         # the shift that lays this frame's body over the base's
         dx, dy = min(
             ((dx, dy) for dy in range(-3, 4) for dx in range(-3, 4)),
             key=lambda s: int((((shifted(a, *s, transparent) != transparent) != (base != transparent))
-                               & (cols < LAP_SEAM_X)).sum()),
+                               & (cols < LAP_HEAD_X)).sum()),
         )
         a = shifted(a, dx, dy, transparent)
-        head = (a != transparent) & ~bowl_of(a) & (cols >= LAP_SEAM_X)
-        out = np.full_like(base, transparent)
-        out[base_bowl] = base[base_bowl]
-        out[body] = base[body]
+        out = base.copy()
+        out[head_area & ~base_bowl] = transparent
+        head = (head_area & (a != transparent) & ~bowl_of(a)) | mouth_tongue(a)
         out[head] = a[head]
         image(out).save(OUT / f"{LAP}-{n}.png")
         print(LAP, n, "head on the base body, shifted", dx, dy)
