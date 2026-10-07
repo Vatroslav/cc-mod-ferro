@@ -529,32 +529,27 @@ def sniff_bob(palette: np.ndarray, dark: set, outline: int) -> None:
 # The drops are saved apart (drink-lap-drop-<frame>-<i>.png, positions in drink-lap-drops.json),
 # so a frame can show without them.
 # ChatGPT redrew her whole body in every frame, so she swayed as if dancing (Vatra, 7.10.2026: her
-# body is still while she drinks). Every frame is therefore frame LAP_BASE (mouth closed above the
-# water) with only the tongue of its own frame pasted on: aligned on the silhouette of the head
-# (LAP_HEAD), and only tongue patches that reach up to her mouth (LAP_MOUTH_Y), because the
-# bowl's pink highlights on the rim also took the tongue colours.
+# body is still while she drinks). Every frame therefore has the body and the bowl of frame
+# LAP_BASE and its own head (Vatra: a head from every frame, one body): the frame is laid on the
+# base by the silhouette of the body (it sat 1-2 pixels off against the bowl, the head did not move
+# against the body), and every pixel of it right of LAP_SEAM_X that is not the bowl goes on top.
+# The bowl is its own colours plus the dark outline next to them, from the row above the rim down.
 LAP = "drink-lap"
 LAP_FACTOR = 7.5  # her height (tail tip to paws, 305 source pixels) and length between drink and run
 LAP_BOWL_X = 72
 LAP_CANVAS_H = CANVAS_H + 4
 LAP_PROP_COLORS = 10
 LAP_BASE = 3
-LAP_HEAD = (slice(10, 33), slice(50, CANVAS_W))  # rows, columns of her head above the bowl
-LAP_MOUTH_Y = 33
+LAP_SEAM_X = 50  # left of it: tail, back, legs; right of it: the head (the bowl starts here too)
 
 
-def head_shift(a: np.ndarray, base: np.ndarray) -> tuple[int, int]:
-    """(dx, dy) that lays the silhouette of the head in a over the one in base."""
-    best = None
-    h, w = a.shape[:2]
-    for dy in range(-3, 4):
-        for dx in range(-3, 4):
-            moved = np.zeros((h, w), bool)
-            moved[max(dy, 0) : h + min(dy, 0), max(dx, 0) : w + min(dx, 0)] =                 a[max(-dy, 0) : h + min(-dy, 0), max(-dx, 0) : w + min(-dx, 0), 3] > 0
-            miss = int((moved != (base[..., 3] > 0))[LAP_HEAD].sum())
-            if best is None or miss < best[0]:
-                best = (miss, dx, dy)
-    return best[1], best[2]
+def shifted(a: np.ndarray, dx: int, dy: int, fill: int) -> np.ndarray:
+    out = np.full_like(a, fill)
+    h, w = a.shape
+    out[max(dy, 0) : h + min(dy, 0), max(dx, 0) : w + min(dx, 0)] = a[
+        max(-dy, 0) : h + min(-dy, 0), max(-dx, 0) : w + min(-dx, 0)
+    ]
+    return out
 
 
 def lap(palette: np.ndarray, tongue_n: int, dark: set, outline: int) -> None:
@@ -616,31 +611,42 @@ def lap(palette: np.ndarray, tongue_n: int, dark: set, outline: int) -> None:
         clean_edges(px, transparent, dark, {*tongue_ids, white_i}, outline)
         catchlights(px, white[box] & own, LAP_FACTOR, white_i, dark, transparent)
         x, y = LAP_BOWL_X - int(bowl_cols.max()), CANVAS_H - 1 - paws
-        canvas = Image.new("RGBA", (CANVAS_W, LAP_CANVAS_H))
-        img = image(px)
-        canvas.paste(img, (x, y), img)
-        canvases.append(np.asarray(canvas).copy())
+        canvas = np.full((LAP_CANVAS_H, CANVAS_W), transparent, dtype=np.int16)
+        canvas[y : y + px.shape[0], x : x + px.shape[1]] = px
+        canvases.append(canvas)
         placed.append((box, x, y))
         print(LAP, n, "size", px.shape[1], "x", px.shape[0], "at", x, y, "bowl bottom row", y + int(np.where(is_prop.any(1))[0].max()))
 
+    def bowl_of(a: np.ndarray) -> np.ndarray:
+        """Everything inside the bowl's outline, from the row above its rim down, but the tongue
+        that reaches into it from her mouth (the pink highlights on the rim took tongue colours)."""
+        own = np.isin(a, list(props))
+        top = int(np.where(own.any(1))[0].min()) - 1
+        region = ndimage.binary_fill_holes(ndimage.binary_dilation(own, np.ones((3, 3)))) & (a != transparent)
+        region[:top] = False
+        lab, k = ndimage.label(np.isin(a, list(tongue_ids)))
+        mouth = [i for i in range(1, k + 1) if np.where(lab == i)[0].min() < top + 1]
+        return region & ~np.isin(lab, mouth)
+
     base = canvases[LAP_BASE]
-    tongue_rgb = palette[fur_n:white_i]
+    base_bowl = bowl_of(base)
+    cols = np.arange(CANVAS_W)[None, :]
+    body = (base != transparent) & ~base_bowl & (cols < LAP_SEAM_X)
     for n, a in enumerate(canvases):
-        out = base.copy()
-        if n != LAP_BASE:
-            dx, dy = head_shift(a, base)
-            src = np.zeros_like(a)
-            h, w = a.shape[:2]
-            src[max(dy, 0) : h + min(dy, 0), max(dx, 0) : w + min(dx, 0)] =                 a[max(-dy, 0) : h + min(-dy, 0), max(-dx, 0) : w + min(-dx, 0)]
-            tongue = np.logical_or.reduce([(src[..., :3] == t).all(2) for t in tongue_rgb]) & (src[..., 3] > 0)
-            lab, k = ndimage.label(tongue)
-            tongue = np.isin(lab, [i for i in range(1, k + 1) if np.where(lab == i)[0].min() <= LAP_MOUTH_Y])
-            # its dark edge where it hangs below her head
-            edge = (ndimage.binary_dilation(tongue) & ~tongue & (src[..., 3] > 0)
-                    & (src[..., :3].astype(int).sum(2) < 200) & (base[..., 3] == 0))
-            out[tongue | edge] = src[tongue | edge]
-            print(LAP, n, "tongue from its own frame, head shift", dx, dy)
-        Image.fromarray(out, "RGBA").save(OUT / f"{LAP}-{n}.png")
+        # the shift that lays this frame's body over the base's
+        dx, dy = min(
+            ((dx, dy) for dy in range(-3, 4) for dx in range(-3, 4)),
+            key=lambda s: int((((shifted(a, *s, transparent) != transparent) != (base != transparent))
+                               & (cols < LAP_SEAM_X)).sum()),
+        )
+        a = shifted(a, dx, dy, transparent)
+        head = (a != transparent) & ~bowl_of(a) & (cols >= LAP_SEAM_X)
+        out = np.full_like(base, transparent)
+        out[base_bowl] = base[base_bowl]
+        out[body] = base[body]
+        out[head] = a[head]
+        image(out).save(OUT / f"{LAP}-{n}.png")
+        print(LAP, n, "head on the base body, shifted", dx, dy)
 
     # each drop belongs to the frame on its left
     positions: dict[int, list] = {}
