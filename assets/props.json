@@ -1,0 +1,22 @@
+{
+  "props": [
+    {"name": "rock", "sheet": "props-ground", "where": "ground", "chance": 28},
+    {"name": "tuft", "sheet": "props-ground", "where": "ground", "chance": 28},
+    {"name": "bush", "sheet": "props-ground", "where": "ground", "chance": 18},
+    {"name": "beach-ball", "sheet": "props-ground", "where": "ground", "chance": 12},
+    {"name": "helmet", "sheet": "props-ground", "where": "ground", "chance": 6},
+    {"name": "sword", "sheet": "props-ground", "where": "ground", "chance": 5},
+    {"name": "ship-1", "sheet": "props-ships", "where": "ground", "chance": 0.5},
+    {"name": "ship-2", "sheet": "props-ships", "where": "ground", "chance": 0.5},
+    {"name": "ship-3", "sheet": "props-ships", "where": "ground", "chance": 0.5},
+    {"name": "ship-4", "sheet": "props-ships", "where": "ground", "chance": 0.5},
+    {"name": "ship-5", "sheet": "props-ships", "where": "ground", "chance": 0.5},
+    {"name": "ship-6", "sheet": "props-ships", "where": "ground", "chance": 0.5},
+    {"name": "tower", "sheet": "props-far", "where": "far", "chance": 30},
+    {"name": "town", "sheet": "props-far", "where": "far", "chance": 30},
+    {"name": "orthanc", "sheet": "props-far-fantasy", "where": "far", "chance": 1},
+    {"name": "barad-dur", "sheet": "props-far-fantasy", "where": "far", "chance": 1},
+    {"name": "minas-tirith", "sheet": "props-far-fantasy", "where": "far", "chance": 1},
+    {"name": "future-city", "sheet": "props-far-future", "where": "far", "chance": 1}
+  ]
+}

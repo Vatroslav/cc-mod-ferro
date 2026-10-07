@@ -12,3 +12,8 @@ preview/programs.html
 
 # sleeping without lying down, what a reopened conversation shows (scene.ts has it)
 preview/*asleep.svg
+
+# the props compared with their drawings, only for viewing (tools/props.py writes them)
+preview/props.html
+preview/props-src/
+preview/props-every.svg

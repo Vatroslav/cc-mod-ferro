@@ -73,6 +73,25 @@ POOPS = {"walkPoop", "stillPoop"}
 SAYS = {"sit": "sits", "sniff": "sniffs", "walkPoop": "poops while walking", "stillPoop": "poops in one spot",
         "drink": "drinks"}
 
+# Props she runs past (Vatra, 7.10.2026): the library is assets/props.json, the drawings come from
+# tools/props.py. They stand still on the meadow, so they need no animation of their own: a prop
+# is a <use> in a group that moves with the ground (or with the hills, for a far one), and it
+# scrolls in from the right as the ground does. Each run has slots where a prop may stand, one
+# after every PROP_GAP_S seconds of running (spaced in ground pixels, so none comes while she
+# stops); the mod picks what stands in each slot on every turn, by the props' chances in percent
+# (what is left to 100 is an empty slot). That is randomness the programs cannot have: an easter
+# egg in one turn of a hundred would need a hundred programs.
+PROPS_FILE = ROOT / "assets" / "props.json"
+PROP_GAP_S = (7.0, 13.0)  # seconds of running between two ground slots
+FAR_GAP_S = (20.0, 40.0)  # between two far slots: a far prop crosses the band in about 20 s
+PROP_BEHIND = (70, 76)  # the bottom row of a prop behind her, picked per slot; her paws stand on row 79
+PROP_FRONT = 81  # the bottom row of a prop in front of her: the band's last row
+PROP_FRONT_SHARE = 0.4  # of the slots that may stand in front of her
+# the bottom row of a far prop: below the lowest valley of the hills (row 28 of the band), so the
+# hills hide it everywhere and only the top shows
+FAR_BASE = 34
+DOG_W = 76  # her canvas
+
 # Pooping in one spot: (frame, seconds) of poop.png
 POOP = [(0, 0.5), (1, 0.35), (2, 0.35), (3, 1.3), (4, 1.6), (5, 0.45)]
 WALK_AWAY_PX = 13  # how far she moves away from the pile in the last frame
@@ -410,9 +429,11 @@ def run_head(meadow: dict, stops: dict[str, Stop]) -> str:
 
 
 def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, Stop]],
-             ball: bool = False) -> str:
+             ball: bool = False, info: dict | None = None) -> str:
     """Everything after </defs> of one run, up to and including </svg>: running, a stop after
-    each (seconds of running, stop) of the program, then running on until the loop closes."""
+    each (seconds of running, stop) of the program, then running on until the loop closes.
+    It marks where the props go (PROP_MARKS, see take_marks). `info` gets the ground's path and
+    the stops, for prop_slots."""
     mw = meadow["width"]
     t = d = 0.0  # second of the loop, px the ground has moved
     ground_pts = [(0.0, 0.0)]
@@ -451,10 +472,13 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
     back_pts = [(s, x * BACK_RATIO) for s, x in ground_pts]
     y_back = meadow["sky_h"]
     y_ground = meadow["sky_h"] + meadow["back_h"]
+    if info is not None:
+        info.update(ground_pts=ground_pts, stops=stops)
+    # far props behind the hills, ground props behind her on the grass
     layers = (
         clouds_layer(meadow)
-        + f"<g>{linear(back_pts, period)}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
-        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}</g>"
+        + f"<g>{linear(back_pts, period)}{PROP_MARKS[0]}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
+        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}{PROP_MARKS[1]}</g>"
     )
 
     # what she leaves on the meadow: placed where the ground is when it appears, then it scrolls
@@ -484,11 +508,100 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
         + "</use>"
         for id_, x, y, s, ws in fronts
     )
-    front_el = f"<g>{linear(ground_pts, period)}{front}</g>" if front else ""
+    # the props in front of her go in the same group
+    front_el = f"<g>{linear(ground_pts, period)}{front}{PROP_MARKS[2]}</g>"
 
     ball_el = ball_layer(ground_pts, shift_pts, stops, period, dog_x, dog_y) if ball else ""
     return (layers + left_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
             + front_el + "</svg>")
+
+
+# Where run_body leaves room for the props: far, behind her, in front of her. take_marks removes
+# them and returns where they were, and the mod inserts the props there.
+PROP_MARKS = ("<!--far-->", "<!--behind-->", "<!--front-->")
+
+
+def take_marks(body: str) -> tuple[str, list[int]]:
+    """The body without the prop marks, and the index of each mark in it."""
+    at_ = []
+    for mark in PROP_MARKS:
+        i = body.index(mark)
+        body = body[:i] + body[i + len(mark):]
+        at_.append(i)
+    return body, at_
+
+
+def load_props() -> list[dict]:
+    """The registry with each drawing's size, without the props too tall for their place (they
+    wait for a smaller drawing, see tools/props.py)."""
+    props = []
+    for p in json.loads(PROPS_FILE.read_text(encoding="utf-8"))["props"]:
+        p["w"], p["h"] = size(f"prop-{p['name']}.png")
+        tallest = PROP_BEHIND[0] if p["where"] == "ground" else FAR_BASE
+        if p["h"] > tallest:
+            print(f"prop {p['name']} left out: {p['h']} pixels tall, at most {tallest}")
+            continue
+        props.append(p)
+    return props
+
+
+def prop_slots(ground_pts: list, stops: list[tuple[float, float]], dog_x: int, rng: random.Random,
+               widest: int) -> tuple[list[list[int]], list[int]]:
+    """Where the props of one run may stand, in the coordinates of the layer they move with, from
+    the start of the run to when she falls asleep (PROGRAM_S): ground slots [x, bottom row, 1 if in
+    front of her] and far slots [x]. A slot is placed so the prop comes in at the right edge of
+    the viewBox after its gap of running. Nothing stands in front of her where she stops: there the
+    prop would stand still over her for the whole stop."""
+    run_end = -at(ground_pts, PROGRAM_S)  # px the ground has moved when she falls asleep
+    still = [(-at(ground_pts, a), -at(ground_pts, b)) for a, b in stops]
+    ground, x = [], VW
+    while True:
+        x += round(rng.uniform(*PROP_GAP_S) * RUN_SPEED)
+        if x - VW >= run_end:
+            break
+        covers = any(x - d1 < dog_x + DOG_W + 8 and x - d0 + widest > dog_x - 8 for d0, d1 in still)
+        front = not covers and rng.random() < PROP_FRONT_SHARE
+        ground.append([x, PROP_FRONT if front else rng.randint(*PROP_BEHIND), int(front)])
+    far, x = [], VW
+    while True:
+        x += round(rng.uniform(*FAR_GAP_S) * RUN_SPEED * BACK_RATIO)
+        if x - VW >= run_end * BACK_RATIO:
+            break
+        far.append(x)
+    return ground, far
+
+
+def pick_prop(props: list[dict], where: str, roll: float) -> int:
+    """The prop a slot gets for a roll in [0, 1), by the chances; -1 for none. The mod does the
+    same in run.ts."""
+    r = roll * 100
+    for i, p in enumerate(props):
+        if p["where"] == where:
+            r -= p["chance"]
+            if r < 0:
+                return i
+    return -1
+
+
+def with_props(body: str, marks: list[int], slots: list, far: list, props: list[dict],
+               picks: dict, ball: tuple[str, int] | None = None) -> str:
+    """The body with the picked props (and the ball) put in, as the mod does in run.ts."""
+    used = sorted({i for i in picks["ground"] + picks["far"] if i >= 0})
+    far_s = "".join(f'<use href="#prop-{props[i]["name"]}" x="{x}" y="{FAR_BASE - props[i]["h"] + 1}"/>'
+                    for x, i in zip(far, picks["far"]) if i >= 0)
+    behind, front = "", ""
+    for (x, row, in_front), i in zip(slots, picks["ground"]):
+        if i >= 0:
+            use = f'<use href="#prop-{props[i]["name"]}" x="{x}" y="{row - props[i]["h"] + 1}"/>'
+            if in_front:
+                front += use
+            else:
+                behind += use
+    pieces = [(marks[0], far_s), (marks[1], behind), (marks[2], front)] + ([ball[::-1]] if ball else [])
+    for at_, piece in sorted(pieces, key=lambda t: -t[0]):
+        body = body[:at_] + piece + body[at_:]
+    defs = "".join(props[i]["def"] for i in used)
+    return (f"<defs>{defs}</defs>" if defs else "") + body
 
 
 # The orange ball she chases: it bounces ahead of her while she runs, rolls on and comes to
@@ -720,6 +833,13 @@ def main() -> None:
     preview.mkdir(exist_ok=True)
     stops = {kind: make() for kind, make in STOPS.items()}
     rng = random.Random(SEED)
+    # the slots get a generator of their own, so the programs stay as they were drawn
+    slot_rng = random.Random(SEED + 1)
+    props = load_props()
+    for p in props:
+        p["def"] = sprite_def(f"prop-{p['name']}", f"prop-{p['name']}.png")
+    widest = max(p["w"] for p in props if p["where"] == "ground")
+    props_defs = sum(len(p["def"]) for p in props)
     scenes = []
     for k, (name, place) in enumerate(BACKGROUNDS.items()):
         meadow = json.loads((PX / f"{name}.json").read_text()) | {"name": name}
@@ -733,38 +853,61 @@ def main() -> None:
         for kind in (kind for kind in stops if kind not in WEIGHTS):
             program = [(RUN_BEFORE, stops[kind])]
             own_head = run_head(meadow, {kind: stops[kind]})
-            (preview / f"{prefix}{kind}.svg").write_text(own_head + run_body(meadow, dog_x, dog_y, program),
-                                                         encoding="utf-8")
+            (preview / f"{prefix}{kind}.svg").write_text(
+                own_head + take_marks(run_body(meadow, dog_x, dog_y, program))[0], encoding="utf-8")
 
         # one stop per scene, for the README and for looking at one kind of stop
         for kind, file in (("walkPoop", "run"), ("stillPoop", "run-still"), ("sit", "sit"), ("sniff", "sniff"),
                            ("drink", "drink")):
             program = [(RUN_BEFORE, stops[kind])]
-            (preview / f"{prefix}{file}.svg").write_text(head + run_body(meadow, dog_x, dog_y, program),
-                                                         encoding="utf-8")
+            (preview / f"{prefix}{file}.svg").write_text(
+                head + take_marks(run_body(meadow, dog_x, dog_y, program))[0], encoding="utf-8")
             (preview / f"{prefix}ball-{file}.svg").write_text(
-                head + run_body(meadow, dog_x, dog_y, program, ball=True), encoding="utf-8")
+                head + take_marks(run_body(meadow, dog_x, dog_y, program, ball=True))[0], encoding="utf-8")
 
-        # the programs: the mod plays one per turn; the ball is a piece it inserts at `ballAt`
-        programs, bands, largest = [], [], 0
+        # the programs: the mod plays one per turn; the ball is a piece it inserts at `ballAt`, the
+        # props it picks go in at `marks`
+        programs, bands, largest, fullest = [], [], 0, 0
+        preview_rng = random.Random(SEED + 2)
         for i, drawn in enumerate(draw_programs(rng, stops)):
             program = [(run_s, stops[kind]) for run_s, kind in drawn]
-            plain = run_body(meadow, dog_x, dog_y, program)
-            with_ball = run_body(meadow, dog_x, dog_y, program, ball=True)
+            info: dict = {}
+            plain, marks = take_marks(run_body(meadow, dog_x, dog_y, program, info=info))
+            with_ball = take_marks(run_body(meadow, dog_x, dog_y, program, ball=True))[0]
             piece, ball_at = with_ball_piece(plain, with_ball)
-            programs.append({"body": plain, "ball": piece, "ballAt": ball_at})
+            slots, far = prop_slots(info["ground_pts"], info["stops"], dog_x, slot_rng, widest)
+            programs.append({"body": plain, "ball": piece, "ballAt": ball_at, "marks": marks, "slots": slots,
+                             "far": far})
             largest = max(largest, len(head) + len(with_ball))
+            # every slot taken and every drawing in: more than any turn gets, the mod drops props then
+            fullest = max(fullest, len(head) + len(with_ball) + props_defs + 60 * (len(slots) + len(far)))
             if k == 0:
                 file, says = f"program-{i}.svg", describe(drawn, stops)
-                print(f"  program {i}: {says}")
+                print(f"  program {i}: {says}; {len(slots)} ground slots, {len(far)} far")
                 if i % 2:
                     file, says = f"ball-{file}", f"with the ball: {says}"
-                (preview / file).write_text(head + (with_ball if i % 2 else plain), encoding="utf-8")
+                picks = {"ground": [pick_prop(props, "ground", preview_rng.random()) for _ in slots],
+                         "far": [pick_prop(props, "far", preview_rng.random()) for _ in far]}
+                shown = with_props(plain, marks, slots, far, props, picks, (piece, ball_at) if i % 2 else None)
+                (preview / file).write_text(head + shown, encoding="utf-8")
+                names = [props[j]["name"] for j in picks["far"] + picks["ground"] if j >= 0]
                 bands.append(f'  <h2>Program {i}: {html.escape(says)}</h2>\n'
+                             f'  <p>Props this time: {html.escape(", ".join(names) or "none")}</p>\n'
                              f'  <div class="band"><img src="{file}" alt="Ferro, program {i}"></div>')
+                if i == 0:
+                    # every prop once, in turn: ground props in the slots, far ones in the far slots
+                    ground_i = [j for j, p in enumerate(props) if p["where"] == "ground"]
+                    far_i = [j for j, p in enumerate(props) if p["where"] == "far"]
+                    every = {"ground": [ground_i[n % len(ground_i)] if ground_i else -1 for n in range(len(slots))],
+                             "far": [far_i[n % len(far_i)] if far_i else -1 for n in range(len(far))]}
+                    (preview / "props-every.svg").write_text(
+                        head + with_props(plain, marks, slots, far, props, every), encoding="utf-8")
+                    bands.insert(0, '  <h2>Every prop in turn (program 0, each slot filled; a real turn '
+                                    'picks by the chances)</h2>\n'
+                                    '  <div class="band"><img src="props-every.svg" alt="Ferro, every prop"></div>')
         assert largest <= SVG_LIMIT, f"{name}: a program with the ball is {largest} chars"
         print(f"{name}: head {len(head)} chars, {len(programs)} programs, largest with the ball "
-              f"{largest} of {SVG_LIMIT}")
+              f"{largest} of {SVG_LIMIT}; with every slot taken and every prop drawing {fullest}")
         if k == 0:
             (preview / "programs.html").write_text(PROGRAMS_PAGE.format(n=len(programs), bands="\n".join(bands)),
                                                    encoding="utf-8")
@@ -783,6 +926,9 @@ def main() -> None:
         "// Generated by tools/scene.py - do not edit by hand.\n"
         f"export const SCENE_MAX_WIDTH = {VW * SCALE}\n"
         f"export const SLEEP_INTRO_MS = {round(SLEEP_INTRO_S * 1000)}\n"
+        f"export const SVG_LIMIT = {SVG_LIMIT}\n"
+        f"export const FAR_BASE = {FAR_BASE}\n"
+        f"export const PROPS = {json.dumps([{k: p[k] for k in ('name', 'where', 'chance', 'h', 'def')} for p in props])}\n"
         f"export const SCENES = {json.dumps(scenes)}\n"
     )
     (ROOT / "plugin" / "hooks" / "scene.ts").write_text(ts, encoding="utf-8")
