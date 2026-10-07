@@ -135,12 +135,12 @@ Rules for this sheet:
 
 ## Message for drinking (7.10.2026)
 
-Attach `ferro-ref.png` and `assets/src/sniff.png` (sniff is not on the reference sheet, and it shows the head-down pose and the scale); save the result as `assets/src/drink.png`. The scene plan (Vatra, 7.10.2026): she runs to a bowl and drinks, and drops of water appear beside the bowl so it reads as water. The bowl and the drops are drawn in code like the ball, not by ChatGPT: the bowl has to scroll in with the grass separately from the dog, the drops have to appear and vanish on their own, and a drop of 1-2 pixels is lost in downsampling, as the eye highlight was. The bowl goes in front of her nose and hides the muzzle tip. The lapping head bob is derived from frame 2 in `build.py`, like `sniff-up`. If ChatGPT moves the body between frames 4 and 5, the closed mouth is derived from frame 4 instead. Frame 1 can be replaced by sniff-0 if it does not match.
+Attach only `ferro-ref.png`; save the result as `assets/src/drink.png`. `sniff.png` is left out on purpose (Vatra, 7.10.2026): ChatGPT draws the slowing down and the lowered head from scratch, and if they come out better than in `sniff.png`, they can replace the sniff frames too. The scene plan (Vatra, 7.10.2026): she runs to a bowl and drinks, and drops of water appear beside the bowl so it reads as water. The bowl and the drops are drawn in code like the ball, not by ChatGPT: the bowl has to scroll in with the grass separately from the dog, the drops have to appear and vanish on their own, and a drop of 1-2 pixels is lost in downsampling, as the eye highlight was. The bowl goes in front of her nose and hides the muzzle tip. The lapping head bob is derived from frame 2 in `build.py`, like `sniff-up`. If ChatGPT moves the body between frames 4 and 5, the closed mouth is derived from frame 4 instead.
 
 ```text
 Sprite sheet: Ferro stops running and drinks water from a bowl that is NOT drawn: a script adds the bowl in front of her nose later. 5 frames, left to right:
 1. Slowing from a run to a stop, last step, head lowering towards the ground.
-2. Drinking: standing still on all four paws, front legs a little apart, head stretched forward and down so that her nose is just above the ground line, lower than in frame 6 of the attached sniff.png. Mouth slightly open, ears relaxed, tail level.
+2. Drinking: standing still on all four paws, front legs a little apart, head stretched forward and down so that her nose is just above the ground line. Mouth slightly open, ears relaxed, tail level.
 3. The same standing body, head lifted halfway, mouth closed.
 4. The same standing body, head raised in normal profile looking right, licking her lips: the tip of the tongue out and curled up over the front of her nose.
 5. The same as frame 4 with the mouth closed, no tongue.
@@ -148,7 +148,7 @@ Sprite sheet: Ferro stops running and drinks water from a bowl that is NOT drawn
 Rules for this sheet:
 - In frames 2 to 5 the body, legs and tail are identical, pixel for pixel, in the same position. Only the head and neck move.
 - No bowl, no water, no drops, no grass, no ground and no shadow.
-- Same scale as the frames in the reference and in sniff.png: standing, she is about 40 pixels from ear tips to paws and about 55 pixels long, with her head the same size as in the reference. Do not draw her bigger.
+- Same scale as the frames in the reference: standing, she is about 40 pixels from ear tips to paws and about 55 pixels long, with her head the same size as in the reference. Do not draw her bigger.
 - All 5 frames stand on the same ground line.
 - The tongue only in frame 4, in the salmon pink from the reference.
 - Use only the colours from the palette in the reference.
