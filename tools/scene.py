@@ -72,7 +72,8 @@ SEED = 6
 WEIGHTS = {"sit": 0.4, "sniff": 0.2, "drink": 0.1, "walkPoop": 0.2, "stillPoop": 0.1}
 POOPS = {"walkPoop", "stillPoop"}
 SAYS = {"sit": "sits", "sniff": "sniffs", "walkPoop": "poops while walking", "stillPoop": "poops in one spot",
-        "drink": "drinks"}
+        "drink": "drinks", "look": "looks around", "listen": "listens", "bread": "eats bread",
+        "breadSniff": "sniffs and eats bread"}
 
 # Props she runs past (Vatra, 7.10.2026): the library is assets/props.json, the drawings come from
 # tools/props.py. They stand still on the meadow, so they need no animation of their own: a prop
@@ -427,7 +428,114 @@ def drink() -> Stop:
     )
 
 
-STOPS = {"sit": sit, "sniff": sniff, "walkPoop": walk_poop, "stillPoop": still_poop, "drink": drink}
+def ear_x(name: str) -> int:
+    """Right edge of the top quarter of a drawing: the right ear (as build.py aligns the frames)."""
+    alpha = Image.open(PX / name).convert("RGBA").getchannel("A")
+    _, top, _, bottom = alpha.getbbox()
+    return alpha.crop((0, top, alpha.width, top + max(1, (bottom - top) // 4))).getbbox()[2] - 1
+
+
+def stand_still(frames: list[tuple[int, float]]) -> Stop:
+    """Looking around or listening (stand.png, Vatra, 7.10.2026: what the real Ferro does on a
+    walk): she brakes (stand-0), stands, turns her head, and runs on from a standstill, from where
+    she stands (her ear against a standing frame of the run's place, poop-0)."""
+    stills, t = sequence([(f"st{f}", s) for f, s in frames])
+    return Stop(
+        dur=t,
+        ground=[(0, 0), (frames[0][1], BRAKE_PX), (t, BRAKE_PX)],
+        stills=stills,
+        sprites={f"st{f}": f"stand-{f}.png" for f, _ in frames},
+        run_from=max(0, ear_x(f"stand-{frames[-1][0]}.png") - ear_x("poop-0.png")),
+    )
+
+
+# stand.png: 0 braking, 1 standing in profile, 2 head three-quarters to the viewer, 3 looking back
+# over her shoulder, 4 listening with the head up and the ears pricked, 5 the same with a head tilt.
+LOOK = [(0, 0.3), (1, 0.6), (2, 0.9), (3, 1.2), (2, 0.5), (1, 0.5)]  # (frame, seconds)
+LISTEN = [(0, 0.3), (1, 0.5), (4, 1.4), (5, 1.2), (4, 0.8), (1, 0.4)]
+
+
+def look() -> Stop:
+    return stand_still(LOOK)
+
+
+def listen() -> Stop:
+    return stand_still(LISTEN)
+
+
+# Eating a piece of bread off the ground (Vatra, 7.10.2026), approached like drinking: the piece
+# comes in with the grass, she slows down and lowers her head (sniff-0), sniffs it (bread-0),
+# picks it up (bread-1; from here it is in her mouth in the drawing), lifts her head with it
+# (bread-2), chews (bread-3 and bread-4), licks her lips (bread-5) and runs on from a standstill.
+BREAD = [(0, 0.8), (1, 0.35), (2, 0.5)]  # (frame, seconds) after sniff-0
+CHEW = ([3, 4], 0.2, 1.6)  # frames looped, seconds per frame, seconds in all
+BREAD_END = [(5, 0.6), (4, 0.4)]
+PIECE_LEAD_S = 6.0  # seconds before she stops that the piece starts coming in, off the right edge
+
+
+def bread() -> Stop:
+    turn_s, turn_px = SNIFF_TURN
+    stills, t = sequence([("n0", turn_s)] + [(f"b{f}", s) for f, s in BREAD])
+    chew_frames, chew_s, chew_all = CHEW
+    chew_end = t + chew_all
+    for f, s in BREAD_END:
+        stills.setdefault(f"b{f}", []).append((chew_end, chew_end + s))
+        chew_end += s
+    piece = json.loads((PX / "bread-piece.json").read_text())
+    last = BREAD_END[-1][0]
+    return Stop(
+        dur=chew_end,
+        ground=[(0, 0), (turn_s, turn_px), (chew_end, turn_px)],
+        stills=stills,
+        sprites={"n0": "sniff-0.png", "piece": "bread-piece.png"}
+        | {f"b{f}": f"bread-{f}.png" for f in {f for f, _ in BREAD + BREAD_END} | set(chew_frames)},
+        cycles=[("b", chew_frames, chew_s, t, t + chew_all)],
+        front=[("piece", piece["x"], piece["y"], turn_s, [(-PIECE_LEAD_S, turn_s + BREAD[0][1])])],
+        run_from=max(0, ear_x(f"bread-{last}.png") - ear_x("poop-0.png")),
+    )
+
+
+PIECE_NOSE_X = 8  # px from the left edge of the piece to the tip of her nose, as in bread-0
+
+
+def bread_sniff() -> Stop:
+    """A variant of bread(): she sniffs the piece as she sniffs a spot (sniff-0, sniff-5 bobbing)
+    and lifts her head with it in her mouth (bread-2), without ChatGPT's frames of her head down
+    (bread-0 and bread-1), whose body leans further forward than the standing one."""
+    turn_s, turn_px = SNIFF_TURN
+    stills: dict[str, list[tuple[float, float]]] = {"n0": [(0, turn_s)], "n5": [], "nu": []}
+    t = turn_s
+    for _ in range(SNIFF_BOBS):
+        stills["n5"].append((t, t + SNIFF_DOWN_S))
+        stills["nu"].append((t + SNIFF_DOWN_S, t + SNIFF_DOWN_S + SNIFF_UP_S))
+        t += SNIFF_DOWN_S + SNIFF_UP_S
+    stills["n5"].append((t, t + SNIFF_LAST_S))
+    t += SNIFF_LAST_S
+    sniffed = t
+    stills["b2"] = [(t, t + BREAD[2][1])]
+    t += BREAD[2][1]
+    chew_frames, chew_s, chew_all = CHEW
+    chew_start, t = t, t + chew_all
+    for f, s in BREAD_END:
+        stills.setdefault(f"b{f}", []).append((t, t + s))
+        t += s
+    piece = json.loads((PX / "bread-piece.json").read_text())
+    nose = Image.open(PX / "sniff-5.png").getchannel("A").getbbox()[2] - 1
+    last = BREAD_END[-1][0]
+    return Stop(
+        dur=t,
+        ground=[(0, 0), (turn_s, turn_px), (t, turn_px)],
+        stills=stills,
+        sprites={"n0": "sniff-0.png", "n5": "sniff-5.png", "nu": "sniff-up.png", "piece": "bread-piece.png"}
+        | {f"b{f}": f"bread-{f}.png" for f in {2, *chew_frames, *(f for f, _ in BREAD_END)}},
+        cycles=[("b", chew_frames, chew_s, chew_start, chew_start + chew_all)],
+        front=[("piece", nose - PIECE_NOSE_X, piece["y"], turn_s, [(-PIECE_LEAD_S, sniffed)])],
+        run_from=max(0, ear_x(f"bread-{last}.png") - ear_x("poop-0.png")),
+    )
+
+
+STOPS = {"sit": sit, "sniff": sniff, "walkPoop": walk_poop, "stillPoop": still_poop, "drink": drink,
+         "look": look, "listen": listen, "bread": bread, "breadSniff": bread_sniff}
 
 
 def run_head(meadow: dict, stops: dict[str, Stop]) -> str:

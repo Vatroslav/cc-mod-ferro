@@ -30,12 +30,21 @@ FIX = ROOT / "assets" / "fix"
 # and running (56).
 # drink.png is drawn a little bigger again (standing 343-359 source pixels long): 6.5 makes her
 # 53-55 pixels long, like standing. Not yet checked by eye.
-FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8, "sit": 9.0, "sniff": 6.0, "drink": 6.5}
+# stand.png (looking around, listening) standing is 343 source pixels long and 282 tall, bread.png
+# 297 and 229: 6.6 and 5.7 make her 52 pixels long, like standing. Not yet checked by eye.
+FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8, "sit": 9.0, "sniff": 6.0, "drink": 6.5,
+          "stand": 6.9, "bread": 5.7}
 # Sheets whose small figures are a row of droppings: each one is saved on its own as
 # <name>-drop-<i>.png. In poop.png the small figure is the pile next to the frame making it.
 # ChatGPT drew them bigger than asked (the largest as wide as a third of the dog), so they get
 # a larger factor of their own: the largest comes out 9 pixels wide, like the old pile.
 DROPPINGS = {"poop-walk": 10.5}
+# Sheets with a piece she eats: drawn on the ground in front of her in one frame and on its own in a
+# row below the frames. The one on its own is saved as <name>-piece.png, with where it lies in that
+# frame in <name>-piece.json. It lies closer to the viewer than her paws, so it may reach below the
+# canvas, as the bowl does. A frame where she holds it in her mouth reaches below her paws too, so
+# the ground of these sheets is where most frames end, not the lowest one.
+PIECES = {"bread"}
 PALETTE_SIZE = 22  # only for --new-palette; otherwise the number of fur colours in palette.json
 
 
@@ -117,7 +126,7 @@ ANCHOR_X = 54
 # Sheets where the head turns, so the ear moves: their frames are aligned on the front toes
 # (the rightmost pixel of the bottom rows) instead, which stay planted.
 # drink: she stands in the same spot from frame 2 on while only her head moves.
-TOES_X = {"sit": 54, "drink": 54}
+TOES_X = {"sit": 54, "drink": 54, "stand": 45, "bread": 45}
 # Sheets where the head is down, so the top quarter of the figure is the tail and the back, not
 # the ear: their frames are aligned on the nose (the rightmost pixel), at the x of the nose of a
 # running frame, so she keeps her place when she drops her nose out of a run.
@@ -519,6 +528,57 @@ def sniff_bob(palette: np.ndarray, dark: set, outline: int) -> None:
     print("sniff-up from", SNIFF_FROM, "columns", SNIFF_HEAD_X, "and right")
 
 
+# Standing still while only her head moves (looking around, listening, chewing). ChatGPT redraws the
+# body in every frame, so she would sway as she did while drinking (Vatra, 7.10.2026: her body is
+# still). As in lap(), each frame's head goes on the body of one base frame: the frame is laid on
+# the base by the silhouette outside the head, and only its head and neck go on top: right of
+# HEAD_X down to NECK_Y (where the head turned back over her shoulder lies too, right of the tail),
+# and right of CHIN_X down to CHIN_Y (the muzzle and the chest above the front legs). With her head
+# down to the bread (bread-0 and bread-1) everything right of the hips is the head's: she leans
+# forward on her front legs, so those frames have a body of their own.
+# sheet, base frame, frames that get its body, HEAD_X, NECK_Y, CHIN_X, CHIN_Y
+ONE_BODY = [
+    ("stand", 1, [2, 3, 4, 5], 31, 22, 46, 30),
+    ("bread", 3, [2, 4, 5], 31, 22, 46, 30),
+    ("bread", 0, [1], 44, 43, 44, 43),
+]
+
+
+def one_body(name: str, base_i: int, members: list, head_x: int, neck_y: int, chin_x: int, chin_y: int,
+             palette: np.ndarray, dark: set, outline: int) -> None:
+    base = np.asarray(Image.open(OUT / f"{name}-{base_i}.png").convert("RGBA"))
+    h, w = base.shape[:2]
+    rows, cols = np.arange(h)[:, None], np.arange(w)[None, :]
+    head = ((cols >= head_x) & (rows <= neck_y)) | ((cols >= chin_x) & (rows <= chin_y))
+    dark_rgb = {tuple(int(c) for c in palette[i]) for i in dark}
+
+    def moved(a: np.ndarray, dx: int, dy: int) -> np.ndarray:
+        out = np.zeros_like(a)
+        out[max(dy, 0) : h + min(dy, 0), max(dx, 0) : w + min(dx, 0)] = a[
+            max(-dy, 0) : h + min(-dy, 0), max(-dx, 0) : w + min(-dx, 0)
+        ]
+        return out
+
+    for n in members:
+        a = np.asarray(Image.open(OUT / f"{name}-{n}.png").convert("RGBA"))
+        dx, dy = min(
+            ((dx, dy) for dy in range(-3, 4) for dx in range(-20, 21)),  # wide: the toes can miss
+            key=lambda s: int((((moved(a, *s)[..., 3] > 0) != (base[..., 3] > 0)) & ~head).sum()),
+        )
+        a = moved(a, dx, dy)
+        out = base.copy()
+        out[head] = a[head]
+        # fur left next to the background where the head meets the base's neck: close the outline
+        solid = out[..., 3] > 0
+        p = np.pad(solid, 1)
+        exposed = solid & ~(p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:])
+        for y, x in zip(*np.where(exposed)):
+            if tuple(int(c) for c in out[y, x, :3]) not in dark_rgb:
+                out[y, x, :3] = palette[outline]
+        Image.fromarray(out, "RGBA").save(OUT / f"{name}-{n}.png")
+        print(name, n, "head on the body of", base_i, "shifted", dx, dy)
+
+
 # Standing up from sitting: she stands on all fours before she runs on (Vatra, 7.10.2026), with
 # the standing frame of pooping in one spot. The sit frames lie further right than the others
 # (aligned on the front toes), so it is moved right until its head is where her head was in
@@ -743,7 +803,8 @@ def main() -> None:
 
         found = components(rgb, 400)
         # the image's ground: the lowest dog (a row of droppings may sit lower)
-        ground = max(box[0].stop for box, _ in found if box[1].stop - box[1].start >= 20 * FACTOR[name])
+        stops = [box[0].stop for box, _ in found if box[1].stop - box[1].start >= 20 * FACTOR[name]]
+        ground = max(stops) if name not in PIECES else max(set(stops), key=stops.count)
         parts = []
         for box, own in found:
             crop = idx[box].copy()
@@ -754,7 +815,9 @@ def main() -> None:
             # the ear used for alignment is measured before cleaning, so frames stay where they were
             ear = ear_right(px, transparent) if px.shape[1] >= 20 else 0
             if name in TOES_X and px.shape[1] >= 20:
-                ear = int(np.where((px[-2:] != transparent).any(0))[0].max())  # front toes
+                # front toes: the two rows above the ground (a piece in her mouth may hang lower)
+                paws = int(round((ground - box[0].start) / factor))
+                ear = int(np.where((px[max(paws - 2, 0) : paws] != transparent).any(0))[0].max())
             if name in NOSE_X and px.shape[1] >= 20:
                 ear = int(np.where((px != transparent).any(0))[0].max())  # nose
             clean_edges(px, transparent, dark, {*tongue_ids, white_i}, outline)
@@ -790,6 +853,25 @@ def main() -> None:
                 print(name, "drop", i, "size", img.width, "x", img.height)
             continue
 
+        if name in PIECES:
+            small = [(box, img) for box, px, _, img in parts if px.shape[1] < 20]
+            alone = next(img for box, img in small if box[0].start >= ground)
+            box = next(box for box, _ in small if box[0].start < ground)
+            mid = (box[1].start + box[1].stop) / 2
+            owner = next(i for i, (b, _) in enumerate(dogs) if b[1].start <= mid < b[1].stop)
+            dog_box, dog_x = dogs[owner]
+            piece = {
+                "frame": owner,
+                "x": dog_x + int(round((box[1].start - dog_box[1].start) / FACTOR[name])),
+                "y": CANVAS_H - int(round((ground - box[0].start) / FACTOR[name])),
+                "w": alone.width,
+                "h": alone.height,
+            }
+            alone.save(OUT / f"{name}-piece.png")
+            (OUT / f"{name}-piece.json").write_text(json.dumps(piece))
+            print(name, "piece", piece)
+            continue
+
         # pile: position on the canvas of the dog right of it (the one making it)
         for box, px, _, img in parts:
             if px.shape[1] >= 20:
@@ -816,6 +898,8 @@ def main() -> None:
     blink(palette, dark, outline)
     sniff_bob(palette, dark, outline)
     sit_up()
+    for name, *spec in ONE_BODY:
+        one_body(name, *spec, palette, dark, outline)
 
 
 if __name__ == "__main__":

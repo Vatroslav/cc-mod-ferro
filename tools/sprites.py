@@ -1,8 +1,8 @@
 """A reference page of every drawing in assets/px: preview/sprites.html, one section per animation,
 enlarged with sharp pixels, each with its file name, size and whether the mod uses it.
 
-"In the mod" means the drawing's data URI is in plugin/hooks/scene.ts, so run tools/scene.py
-first. The page links the PNGs by relative path, so it shows the files as they are on disk.
+"In the mod" means the drawing's data URI is in plugin/hooks/scene.ts or one of the scene modules
+it imports (scene-<background>.ts), so run tools/scene.py first. The page links the PNGs by relative path, so it shows the files as they are on disk.
 Run (from the repo root, after tools/build.py and tools/scene.py): python tools/sprites.py
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 from scene import PX, ROOT, sprite_def
 
 OUT = ROOT / "preview" / "sprites.html"
-SCENE_TS = ROOT / "plugin" / "hooks" / "scene.ts"
+HOOKS = ROOT / "plugin" / "hooks"
 
 # (section, file name pattern, zoom); a file goes to the first section it matches
 SECTIONS = [
@@ -36,7 +36,7 @@ def order(name: str) -> tuple:
 
 
 def main() -> None:
-    ts = SCENE_TS.read_text(encoding="utf-8")
+    ts = "".join(f.read_text(encoding="utf-8") for f in sorted(HOOKS.glob("scene*.ts")))
     files = sorted((f for f in PX.glob("*.png")), key=lambda f: order(f.stem))
     sections: dict[str, list[tuple[Path, int]]] = {title: [] for title, _, _ in SECTIONS}
     other: list[tuple[Path, int]] = []
