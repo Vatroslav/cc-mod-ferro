@@ -67,9 +67,12 @@ PROGRAMS = 10  # per background
 # something to happen (the first stop came after 16 s then)
 GAP_S = (6.0, 12.0)
 SEED = 6
-# drinking came in at 0.1 of the first stops, taken from sitting (7.10.2026), so the other shares
-# stayed as Vatra set them
-WEIGHTS = {"sit": 0.4, "sniff": 0.2, "drink": 0.1, "walkPoop": 0.2, "stillPoop": 0.1}
+# drinking came in at 0.1 of the first stops, taken from sitting (7.10.2026). Looking around,
+# listening and eating bread came in at 0.1 each (0.13.0, 7.10.2026), taken from sitting (0.4 to
+# 0.2) and sniffing (0.2 to 0.1), which alternated after the poop: sitting went from 42% of all
+# stops to 24% (simulated over 300 seeds), poop stayed as Vatra set it
+WEIGHTS = {"sit": 0.2, "sniff": 0.1, "drink": 0.1, "look": 0.1, "listen": 0.1, "bread": 0.1, "walkPoop": 0.2,
+           "stillPoop": 0.1}
 POOPS = {"walkPoop", "stillPoop"}
 SAYS = {"sit": "sits", "sniff": "sniffs", "walkPoop": "poops while walking", "stillPoop": "poops in one spot",
         "drink": "drinks", "look": "looks around", "listen": "listens", "bread": "eats bread"}
@@ -955,7 +958,7 @@ def main() -> None:
 
         # one stop per scene, for the README and for looking at one kind of stop
         for kind, file in (("walkPoop", "run"), ("stillPoop", "run-still"), ("sit", "sit"), ("sniff", "sniff"),
-                           ("drink", "drink")):
+                           ("drink", "drink"), ("look", "look"), ("listen", "listen"), ("bread", "bread")):
             program = [(RUN_BEFORE, stops[kind])]
             (preview / f"{prefix}{file}.svg").write_text(
                 head + take_marks(run_body(meadow, dog_x, dog_y, program))[0], encoding="utf-8")
