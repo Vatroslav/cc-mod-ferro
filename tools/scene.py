@@ -536,6 +536,9 @@ def load_props() -> list[dict]:
     wait for a smaller drawing, see tools/props.py)."""
     props = []
     for p in json.loads(PROPS_FILE.read_text(encoding="utf-8"))["props"]:
+        if not (PX / f"prop-{p['name']}.png").exists():
+            print(f"prop {p['name']} left out: not drawn yet")
+            continue
         p["w"], p["h"] = size(f"prop-{p['name']}.png")
         tallest = PROP_BEHIND[0] if p["where"] == "ground" else FAR_BASE
         if p["h"] > tallest:

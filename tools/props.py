@@ -161,6 +161,12 @@ def main() -> None:
         assert total <= 100, f"the chances of the {where} props add up to {total}, over 100"
     for sheet in dict.fromkeys(p["sheet"] for p in props):
         mine = [p for p in props if p["sheet"] == sheet]
+        if not (SRC / f"{sheet}.png").exists():
+            # a sheet ChatGPT has not drawn yet: its props stay out of the mod
+            for p in mine:
+                (OUT / f"prop-{p['name']}.png").unlink(missing_ok=True)
+            print(f"{sheet}: not drawn yet, so {', '.join(p['name'] for p in mine)} wait")
+            continue
         rgb = np.asarray(Image.open(SRC / f"{sheet}.png").convert("RGB"))
         bg = background_mask(rgb)
         bg |= fringe_mask(rgb, bg)
@@ -212,6 +218,8 @@ PAGE = """<!doctype html>
 def page(props: list[dict]) -> None:
     rows = []
     for p in props:
+        if not (OUT / f"prop-{p['name']}.png").exists():
+            continue
         w, h = Image.open(OUT / f"prop-{p['name']}.png").size
         sw, sh = Image.open(PREVIEW_SRC / f"{p['name']}.png").size
         zoom = max(1, round(sh / h))

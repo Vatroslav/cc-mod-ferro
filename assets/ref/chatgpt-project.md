@@ -306,3 +306,20 @@ Rules for this sheet:
 - Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
 - No text, no labels.
 ```
+
+The ships, far away (attach `assets/src/props-ships.png` and `ferro-meadow.png`; save as `assets/src/props-ships-far.png`). Vatra meant the ships far in the background, so they look huge (7.10.2026): on the grass beside her, at their drawn size, they looked like slightly bigger toys. Landed behind the hills, small and hazy with distance, they stand with the far buildings.
+
+```text
+Redraw the six attached spaceships as if seen very far away, landed behind the hills of the attached meadow: the same six ships with the same shapes, in the same order (top row left to right, then bottom row left to right), but pale, hazy and slightly bluish like the distant hills in the meadow, with little detail, no dark outline and much bigger pixels. Flat solid pure magenta (#FF00FF) background.
+
+Measures:
+- A wide landscape image, three times as wide as it is tall, drawn as a grid of 192 pixels across and 64 pixels down: every pixel is one solid square block, 1/192 of the image width. No smaller detail than one block.
+- Two rows of three ships, well apart from each other.
+- Each ship about 48 pixels wide and 18 pixels tall including the landing legs: less than a third of the height of the image.
+- The ships of a row stand on the same flat bottom line.
+
+Rules for this sheet:
+- The bottom third of each ship (the landing legs) will be hidden behind hills, so keep the hull, the cockpit and the fins in its top two thirds.
+- Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
+- No text, no labels.
+```
