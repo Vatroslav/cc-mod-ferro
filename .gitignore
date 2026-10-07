@@ -9,3 +9,6 @@ preview/*.gif
 preview/program-*.svg
 preview/ball-program-*.svg
 preview/programs.html
+
+# sleeping without lying down, what a reopened conversation shows (scene.ts has it)
+preview/*asleep.svg

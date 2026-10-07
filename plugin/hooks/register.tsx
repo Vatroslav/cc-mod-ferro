@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
 
 import type { FerroPhase } from '../types'
-import { SCENE_MAX_WIDTH, SCENES } from './scene'
+import { SCENE_MAX_WIDTH, SCENES, SLEEP_INTRO_MS } from './scene'
 
 // Ferro comes out only when a turn lasts longer than this, so short answers do not flash the band.
 const RUN_AFTER_MS = 20_000
@@ -38,6 +38,10 @@ export const register: Register = on => {
     timers = [
       $.clock.after(RUN_AFTER_MS, () => void update($, phase, () => 'run')),
       $.clock.after(SLEEP_AFTER_MS, () => void update($, phase, () => 'sleep')),
+      // The band starts a scene from its first frame whenever it draws it anew (reopening the
+      // conversation), so once she has lain down she sleeps on in the scene without lying down.
+      // It starts where the other one is when she has lain down, so the swap does not show.
+      $.clock.after(SLEEP_AFTER_MS + SLEEP_INTRO_MS, () => void update($, phase, () => 'asleep')),
     ]
     return next(e)
   })
@@ -87,8 +91,8 @@ export const register: Register = on => {
     return (
       <Box>
         <Svg
-          source={now === 'sleep' ? s.sleep : run}
-          alt={now === 'sleep' ? `Ferro asleep on ${s.place}` : runAlt}
+          source={now === 'sleep' ? s.sleep : now === 'asleep' ? s.asleep : run}
+          alt={now === 'run' ? runAlt : `Ferro asleep on ${s.place}`}
           width={width}
           height={s.height}
         />
