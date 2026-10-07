@@ -292,6 +292,8 @@ Rules for this sheet:
 - No text, no labels.
 ```
 
+Vatra dropped the future city after the redraw (7.10.2026); the message stays as a record.
+
 The future city (attach `assets/src/props-far-future.png` and `ferro-meadow.png`; save as `assets/src/props-far-future.png`):
 
 ```text
