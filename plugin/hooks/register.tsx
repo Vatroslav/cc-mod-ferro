@@ -16,7 +16,7 @@ const phase = atom({ plugin: 'cc-mod-ferro', key: 'phase' } as const, null as Fe
 // This turn's background, an index into SCENES: picked at random on every turn.
 const scene = atom({ plugin: 'cc-mod-ferro', key: 'scene' } as const, 0)
 // This turn's run, an index into the background's programs, also picked per turn. A program is a
-// run with its stops (sitting, sniffing, pooping), drawn in tools/scene.py: SMIL has no randomness.
+// run with its stops (sitting, sniffing, drinking, pooping), drawn in tools/scene.py: SMIL has no randomness.
 const program = atom({ plugin: 'cc-mod-ferro', key: 'program' } as const, 0)
 // Whether she chases the ball this turn, also picked per turn.
 const ball = atom({ plugin: 'cc-mod-ferro', key: 'ball' } as const, false)

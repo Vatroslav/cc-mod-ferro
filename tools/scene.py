@@ -58,7 +58,9 @@ PROGRAM_S = 160
 PROGRAMS = 10  # per background
 GAP_S = (12.0, 22.0)  # seconds of running between two stops
 SEED = 6
-WEIGHTS = {"sit": 0.5, "sniff": 0.2, "walkPoop": 0.2, "stillPoop": 0.1}
+# drinking came in at 0.1 of the first stops, taken from sitting (7.10.2026), so the other shares
+# stayed as Vatra set them
+WEIGHTS = {"sit": 0.4, "sniff": 0.2, "drink": 0.1, "walkPoop": 0.2, "stillPoop": 0.1}
 POOPS = {"walkPoop", "stillPoop"}
 SAYS = {"sit": "sits", "sniff": "sniffs", "walkPoop": "poops while walking", "stillPoop": "poops in one spot",
         "drink": "drinks"}
@@ -694,7 +696,8 @@ def main() -> None:
                                                          encoding="utf-8")
 
         # one stop per scene, for the README and for looking at one kind of stop
-        for kind, file in (("walkPoop", "run"), ("stillPoop", "run-still"), ("sit", "sit"), ("sniff", "sniff")):
+        for kind, file in (("walkPoop", "run"), ("stillPoop", "run-still"), ("sit", "sit"), ("sniff", "sniff"),
+                           ("drink", "drink")):
             program = [(RUN_BEFORE, stops[kind])]
             (preview / f"{prefix}{file}.svg").write_text(head + run_body(meadow, dog_x, dog_y, program),
                                                          encoding="utf-8")
