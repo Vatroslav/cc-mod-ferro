@@ -190,3 +190,63 @@ Rules for this sheet:
 - The tongue in the salmon pink of the reference, with its shading. The drops light blue with a white highlight pixel.
 - All 4 frames stand on the same ground line. No grass, no ground, no shadow.
 ```
+
+## Messages for the props she runs past (7.10.2026)
+
+Props stand on the meadow or in the distance and scroll past while Ferro runs; she does not touch them (Vatra, 7.10.2026). They are a library: one line per prop in a registry, so a new one is one drawing and one line (see "Props she runs past" in CLAUDE.md). `build.py` cuts each figure and scales it to the height the registry gives it, so ChatGPT drawing them too big does not matter as long as the detail is chunky enough for that height. The figures are cut left to right, so the order in the message is the order of the names.
+
+Sizes are in band pixels, the same pixels as Ferro's 40 from ear tips to paws. The band is 82 pixels tall and her paws stand 80 pixels below the top, so a prop on the grass can be up to about 60 pixels tall.
+
+### Ground props (save as `assets/src/props-ground.png`)
+
+Attach `assets/ref/ferro-ref.png` and `assets/src/meadow.png`.
+
+```text
+Sprite sheet: props that stand on the meadow in Ferro's strip. No dog in this image. Six separate objects in one row, left to right, well apart from each other, all standing on the same ground line:
+1. A grey rock, low and rounded, about 12 pixels wide and 8 tall.
+2. A big tuft of tall meadow grass, about 14 pixels wide and 12 tall, in the greens of the grass in the attached meadow.
+3. A round leafy green bush, about 32 pixels wide and 26 tall, in the greens of the bushes in the attached meadow.
+4. A big inflatable beach ball with red, white, yellow and blue segments, about 20 pixels across, resting on the ground.
+5. A medieval knight's steel helmet with a visor slit, lying on its side on the ground, about 14 pixels wide and 11 tall.
+6. A medieval sword stuck point-down in the ground, slightly tilted, crossguard and grip above: about 9 pixels wide and 30 tall from the ground to the pommel. Only the part above the ground is drawn.
+
+Rules for this sheet:
+- Same scale as Ferro in the reference: she is about 40 pixels from ear tips to paws. Keep each object at the size given above; do not draw them bigger.
+- Each object sits on a flat bottom on the same ground line, as it would stand on the grass. No grass under them, no ground, no shadow.
+- Same pixel-art style as Ferro and the meadow: crisp hard pixels, dark 1-pixel outline, no anti-aliasing, no gradients, lit from the top left.
+- New colours only for these objects. Never magenta or purple.
+- Flat solid pure magenta (#FF00FF) background, no text, no labels.
+```
+
+### Props in the distance (save as `assets/src/props-far.png`)
+
+Attach `assets/ref/ferro-ref.png` and `assets/src/meadow.png`. In the scene they stand behind the hills and scroll at the hills' speed, so the hills hide their bottom; the bottom only has to be flat.
+
+```text
+Sprite sheet: buildings far in the distance behind the hills of the attached meadow. No dog in this image. Two separate objects in one row, left to right, well apart from each other, on the same bottom line:
+1. A round stone castle tower with battlements and a small pointed roof with a flag, about 14 pixels wide and 30 tall.
+2. A small medieval town on a hill seen from far away: a cluster of houses with red roofs, a town wall and a church steeple, about 60 pixels wide and 22 tall.
+
+Rules for this sheet:
+- They are far away: pale, hazy and slightly bluish colours, like the distant hills in the attached meadow, with little detail and no dark outline, so they sit behind the hills and do not stand out more than the hills do.
+- Flat straight bottom on the same line; the hills will hide it.
+- Keep the sizes given above; do not draw them bigger.
+- Crisp hard pixels, no anti-aliasing, no gradients.
+- New colours only for these objects. Never magenta or purple.
+- Flat solid pure magenta (#FF00FF) background, no text, no labels.
+```
+
+### A new prop for the library (template)
+
+Attach `assets/ref/ferro-ref.png` and `assets/src/meadow.png`; save as `assets/src/props-<name>.png`. For a prop in the distance, take the rules of the far sheet instead.
+
+```text
+Sprite sheet: a prop that stands on the meadow in Ferro's strip. No dog in this image. <What it is, its colours>, about <W> pixels wide and <H> tall, standing on a flat bottom on the ground line.
+
+Rules for this sheet:
+- Same scale as Ferro in the reference: she is about 40 pixels from ear tips to paws. Keep the size given above; do not draw it bigger.
+- No grass under it, no ground, no shadow.
+- Same pixel-art style as Ferro and the meadow: crisp hard pixels, dark 1-pixel outline, no anti-aliasing, no gradients, lit from the top left.
+- New colours only for this object. Never magenta or purple.
+- Flat solid pure magenta (#FF00FF) background, no text, no labels.
+```
