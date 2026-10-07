@@ -895,15 +895,22 @@ def main() -> None:
                              f'  <p>Props this time: {html.escape(", ".join(names) or "none")}</p>\n'
                              f'  <div class="band"><img src="{file}" alt="Ferro, program {i}"></div>')
                 if i == 0:
-                    # every prop once, in turn: ground props in the slots, far ones in the far slots
-                    ground_i = [j for j, p in enumerate(props) if p["where"] == "ground"]
-                    far_i = [j for j, p in enumerate(props) if p["where"] == "far"]
-                    every = {"ground": [ground_i[n % len(ground_i)] if ground_i else -1 for n in range(len(slots))],
-                             "far": [far_i[n % len(far_i)] if far_i else -1 for n in range(len(far))]}
+                    # every prop once, the rarest first, one close behind the other (in the real slots
+                    # the last ones came after 100 s and Vatra never saw the ships, 7.10.2026)
+                    ground_i = sorted((j for j, p in enumerate(props) if p["where"] == "ground"),
+                                      key=lambda j: props[j]["chance"])
+                    far_i = sorted((j for j, p in enumerate(props) if p["where"] == "far"),
+                                   key=lambda j: props[j]["chance"])
+                    step = widest + 80
+                    show_slots = [[VW + 80 + n * step, PROP_BEHIND[1], 0] for n in range(len(ground_i))]
+                    show_far = [VW + 80 + n * 200 for n in range(len(far_i))]
+                    every = {"ground": ground_i, "far": far_i}
                     (preview / "props-every.svg").write_text(
-                        head + with_props(plain, marks, slots, far, props, every), encoding="utf-8")
-                    bands.insert(0, '  <h2>Every prop in turn (program 0, each slot filled; a real turn '
+                        head + with_props(plain, marks, show_slots, show_far, props, every), encoding="utf-8")
+                    names = ", ".join(props[j]["name"] for j in far_i + ground_i)
+                    bands.insert(0, '  <h2>Every prop once, the rarest first, one after the other (a real turn '
                                     'picks by the chances)</h2>\n'
+                                    f'  <p>{html.escape(names)}</p>\n'
                                     '  <div class="band"><img src="props-every.svg" alt="Ferro, every prop"></div>')
         assert largest <= SVG_LIMIT, f"{name}: a program with the ball is {largest} chars"
         print(f"{name}: head {len(head)} chars, {len(programs)} programs, largest with the ball "
