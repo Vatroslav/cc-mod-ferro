@@ -519,6 +519,107 @@ def sniff_bob(palette: np.ndarray, dark: set, outline: int) -> None:
     print("sniff-up from", SNIFF_FROM, "columns", SNIFF_HEAD_X, "and right")
 
 
+# Lapping water: drink-lap.png (ChatGPT, 7.10.2026) has four frames of Ferro drinking with the red
+# bowl drawn in, and the drops flying out beside it as figures of their own. The bowl and the water
+# are not dog colours: they get a palette of their own (LAP_PROP_COLORS, median cut over them),
+# appended after the dog's. The bowl is the largest red patch of a frame (the red is far more
+# saturated than the tongue: green under 0.3 of red, the tongue above 0.45). Every frame is placed
+# so the bowl stays put (its right edge at LAP_BOWL_X) and the paws stand on the usual ground row
+# (CANVAS_H - 1); the bowl stands closer to the viewer and reaches lower, so the canvas is taller.
+# The drops are saved apart (drink-lap-drop-<frame>-<i>.png, positions in drink-lap-drops.json),
+# so a frame can show without them.
+LAP = "drink-lap"
+LAP_FACTOR = 7.5  # her height (tail tip to paws, 305 source pixels) and length between drink and run
+LAP_BOWL_X = 72
+LAP_CANVAS_H = CANVAS_H + 4
+LAP_PROP_COLORS = 10
+
+
+def lap(palette: np.ndarray, tongue_n: int, dark: set, outline: int) -> None:
+    rgb = np.asarray(Image.open(SRC / f"{LAP}.png").convert("RGB"))
+    bg = background_mask(rgb)
+    bg |= fringe_mask(rgb, bg)
+    r, g, b = [rgb[..., i].astype(float) for i in range(3)]
+    red = (r > 100) & (g / np.maximum(r, 1) < 0.3) & (b / np.maximum(r, 1) < 0.35) & ~bg
+    blue = (b > r + 30) & ~bg
+    found = components(rgb, 200)  # the smallest drop is about 330 source pixels
+    frames = [(box, own) for box, own in found if box[1].stop - box[1].start >= 20 * LAP_FACTOR]
+    drops = [(box, own) for box, own in found if box[1].stop - box[1].start < 20 * LAP_FACTOR]
+    prop = blue | (white_mask(rgb) & ndimage.binary_dilation(blue, iterations=4))
+    for box, own in frames:
+        lab, k = ndimage.label(red[box] & own)
+        sizes = ndimage.sum(lab > 0, lab, range(1, k + 1))
+        prop[box] |= lab == int(np.argmax(sizes)) + 1
+
+    fur_n = len(palette) - tongue_n - 1
+    white_i = fur_n + tongue_n
+    q = Image.fromarray(rgb[prop].reshape(1, -1, 3)).quantize(
+        LAP_PROP_COLORS, method=Image.Quantize.MEDIANCUT, kmeans=10
+    )
+    pal = np.vstack([palette, np.array(q.getpalette()[: LAP_PROP_COLORS * 3]).reshape(-1, 3)])
+    prop_0, transparent = len(palette), len(pal)
+    flat = rgb.reshape(-1, 3).astype(int)
+    best = np.zeros(len(flat), dtype=np.int16)
+    best_d = np.full(len(flat), 1 << 30)
+    for i, p in enumerate(palette[:fur_n]):
+        d = ((flat - p) ** 2).sum(1)
+        better = d < best_d
+        best[better], best_d[better] = i, d[better]
+    idx = best.reshape(bg.shape)
+    shade = tongue_shades(rgb, bg | prop, palette[fur_n:white_i].astype(float))
+    idx[shade >= 0] = fur_n + shade[shade >= 0]
+    white = white_mask(rgb) & ~prop
+    idx[white] = white_i
+    idx[prop] = prop_0 + np.asarray(q).ravel()
+    idx[bg] = transparent
+    tongue_ids = tuple(range(fur_n, white_i))
+    props = set(range(prop_0, transparent))
+
+    def image(px: np.ndarray) -> Image.Image:
+        out = np.zeros((*px.shape, 4), dtype=np.uint8)
+        solid = px != transparent
+        out[solid, :3] = pal[px[solid]]
+        out[solid, 3] = 255
+        return Image.fromarray(out, "RGBA")
+
+    placed = []
+    for n, (box, own) in enumerate(frames):
+        crop = idx[box].copy()
+        crop[~own] = transparent
+        px = downsample(crop, LAP_FACTOR, transparent, tongue_ids)
+        is_prop = np.isin(px, list(props))
+        bowl_cols = np.where(is_prop.any(0))[0]
+        dog = (px != transparent) & ~is_prop
+        paws = int(np.where(dog[:, : bowl_cols.min()].any(1))[0].max())
+        clean_edges(px, transparent, dark, {*tongue_ids, white_i}, outline)
+        catchlights(px, white[box] & own, LAP_FACTOR, white_i, dark, transparent)
+        x, y = LAP_BOWL_X - int(bowl_cols.max()), CANVAS_H - 1 - paws
+        canvas = Image.new("RGBA", (CANVAS_W, LAP_CANVAS_H))
+        img = image(px)
+        canvas.paste(img, (x, y), img)
+        canvas.save(OUT / f"{LAP}-{n}.png")
+        placed.append((box, x, y))
+        print(LAP, n, "size", px.shape[1], "x", px.shape[0], "at", x, y, "bowl bottom row", y + int(np.where(is_prop.any(1))[0].max()))
+
+    # each drop belongs to the frame on its left
+    positions: dict[int, list] = {}
+    for box, own in drops:
+        n = max(i for i, (fb, _, _) in enumerate(placed) if fb[1].start < box[1].start)
+        fb, fx, fy = placed[n]
+        crop = idx[box].copy()
+        crop[~own] = transparent
+        px = downsample(crop, LAP_FACTOR, transparent)
+        k = len(positions.setdefault(n, []))
+        image(px).save(OUT / f"{LAP}-drop-{n}-{k}.png")
+        positions[n].append({
+            "x": fx + int(round((box[1].start - fb[1].start) / LAP_FACTOR)),
+            "y": fy + int(round((box[0].start - fb[0].start) / LAP_FACTOR)),
+            "w": px.shape[1], "h": px.shape[0],
+        })
+    (OUT / f"{LAP}-drops.json").write_text(json.dumps(positions))
+    print(LAP, "drops", {n: len(v) for n, v in positions.items()})
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name in BACKGROUNDS:
@@ -625,6 +726,7 @@ def main() -> None:
     ball(palette[outline])
     for name in PROP_FACTOR:
         props(name)
+    lap(palette, tongue_n, dark, outline)
     blink(palette, dark, outline)
     sniff_bob(palette, dark, outline)
 

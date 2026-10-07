@@ -1,8 +1,9 @@
 # preview/*.svg is committed: tools/scene.py generates it and the README shows it as animation
 __pycache__/
 
-# before/after comparisons, only for viewing
+# before/after comparisons and animations, only for viewing
 preview/*.png
+preview/*.gif
 
 # the programs, only for viewing (tools/scene.py writes them; scene.ts has them all)
 preview/program-*.svg
