@@ -435,53 +435,45 @@ def ball(outline_rgb: np.ndarray) -> None:
     print("ball", BALL_D, "x", BALL_D)
 
 
-# The water bowl she drinks from and the drops she splashes beside it are drawn here too, like
-# the ball (Vatra, 7.10.2026). The bowl is seen from a little above: the back edge of the rim, a
-# row of water, the front lip and the side, 16 pixels wide. It is saved in two parts: the back
-# edge goes behind her and the rest in front, so her mouth dips under the water (bowl-back.png,
-# bowl-front.png; the front starts one row lower). o is Ferro's outline, the rest are keys of
-# BOWL_COLORS and WATER_COLORS.
-BOWL = [
-    ".....oooooooooo.....",
-    "...ooLLLLLLLLLLoo...",
-    "..oLwwwwwwwwwwwwLo..",
-    ".oLwwgwwwwwwwwwwwLo.",
-    "oLLLLLLLLLLLLLLLLLLo",
-    "oBHBBBBBBBBBBBBBBBBo",
-    "oBHBBBBBBBBBBBBBBBSo",
-    ".oSSSSSSSSSSSSSSSSo.",
-    "..oooooooooooooooo..",
-]
-BOWL_BACK_ROWS = 2
-BOWL_COLORS = {"L": "#f2715f", "B": "#d63f35", "H": "#f2715f", "S": "#9e2a26"}
-WATER_COLORS = {"w": "#4fa6e6", "l": "#a9dcf8", "g": "#fcfcf6"}
-# water drops, longer than wide so they do not look like the meadow's flowers, edged in water blue
-# (a dark edge made them look like blue gems): a big one with a white glint and a small one
-WATER_DROPS = [
-    [".w.", "wgw", "wlw", ".w."],
-    ["l", "w"],
-]
+# The water bowls she drinks from and the drops she splashes beside them: bowl.png (ChatGPT),
+# three bowls in a row (red, steel, blue) and five drops below them. The code-drawn bowl was
+# rejected (Vatra, 7.10.2026). They are props with colours of their own, so each figure gets its
+# own small palette (median cut over its pixels, like the clouds) instead of the dog's, and one
+# factor for all: the bowls come out about 20 pixels wide, wide enough for her muzzle, and the
+# drops keep their size relative to the bowls. Saved as bowl-<i>.png and water-drop-<i>.png.
+PROP_FACTOR = {"bowl": 20.0}
+PROP_COLORS = (10, 5)  # colours of a bowl, of a drop
+PROP_BIG = 200  # source pixels: a wider figure is a bowl, a narrower one a drop
 
 
-def pixel_art(rows: list[str], colors: dict, outline_rgb: np.ndarray) -> np.ndarray:
-    rgb = lambda h: [int(h[i : i + 2], 16) for i in (1, 3, 5)]  # noqa: E731
-    out = np.zeros((len(rows), len(rows[0]), 4), dtype=np.uint8)
-    for y, row in enumerate(rows):
-        for x, c in enumerate(row):
-            if c == "o":
-                out[y, x] = [*outline_rgb, 255]
-            elif c != ".":
-                out[y, x] = rgb(colors[c]) + [255]
-    return out
-
-
-def bowl(outline_rgb: np.ndarray, colors: dict = BOWL_COLORS) -> None:
-    a = pixel_art(BOWL, colors | WATER_COLORS, outline_rgb)
-    Image.fromarray(a[:BOWL_BACK_ROWS], "RGBA").save(OUT / "bowl-back.png")
-    Image.fromarray(a[BOWL_BACK_ROWS:], "RGBA").save(OUT / "bowl-front.png")
-    for i, rows in enumerate(WATER_DROPS):
-        Image.fromarray(pixel_art(rows, WATER_COLORS, outline_rgb), "RGBA").save(OUT / f"water-drop-{i}.png")
-    print("bowl", len(BOWL[0]), "x", len(BOWL), "and", len(WATER_DROPS), "water drops")
+def props(name: str) -> None:
+    rgb = np.asarray(Image.open(SRC / f"{name}.png").convert("RGB"))
+    bg = background_mask(rgb)
+    bg |= fringe_mask(rgb, bg)
+    factor = PROP_FACTOR[name]
+    counts = {"bowl": 0, "water-drop": 0}
+    for box, own in components(rgb, 400):
+        big = box[1].stop - box[1].start >= PROP_BIG
+        mine = own & ~bg[box]
+        n = PROP_COLORS[0 if big else 1]
+        q = Image.fromarray(rgb[box][mine].reshape(1, -1, 3)).quantize(
+            n, method=Image.Quantize.MEDIANCUT, kmeans=10
+        )
+        pal = np.array(q.getpalette()[: n * 3]).reshape(-1, 3)
+        idx = np.full(mine.shape, n, dtype=np.int16)
+        idx[mine] = np.asarray(q).ravel()
+        px = downsample(idx, factor, n)
+        if big:  # a drop is all edge: cleaning would turn it into outline
+            dark = {i for i, p in enumerate(pal) if p.sum() < 200}
+            clean_edges(px, n, dark, set(), int(pal.sum(1).argmin()))
+        out = np.zeros((*px.shape, 4), dtype=np.uint8)
+        solid = px != n
+        out[solid, :3] = pal[px[solid]]
+        out[solid, 3] = 255
+        kind = "bowl" if big else "water-drop"
+        Image.fromarray(out, "RGBA").save(OUT / f"{kind}-{counts[kind]}.png")
+        print(kind, counts[kind], "size", px.shape[1], "x", px.shape[0])
+        counts[kind] += 1
 
 
 def breathing(palette: np.ndarray, dark: set, outline: int) -> None:
@@ -631,7 +623,8 @@ def main() -> None:
 
     breathing(palette, dark, outline)
     ball(palette[outline])
-    bowl(palette[outline])
+    for name in PROP_FACTOR:
+        props(name)
     blink(palette, dark, outline)
     sniff_bob(palette, dark, outline)
 
