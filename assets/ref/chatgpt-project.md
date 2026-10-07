@@ -153,3 +153,21 @@ Rules for this sheet:
 - The tongue only in frame 4, in the salmon pink from the reference.
 - Use only the colours from the palette in the reference.
 ```
+
+## Message for the water bowl and drops (7.10.2026)
+
+Attach `ferro-ref.png` and `assets/src/drink.png`; save the result as `assets/src/bowl.png`. Vatra rejected the bowl and drops drawn in code (`bowl()` in `build.py`, 7.10.2026: "Užas"). The bowl stays a separate prop, not drawn with the dog, because it scrolls in with the grass; `build.py` splits it into the back of the rim (behind her) and the rest (in front of her), so her muzzle dips under the water. The bowls and drops get factors of their own, like the droppings, because ChatGPT draws props bigger than asked. Three bowls in one sheet, so Vatra can choose.
+
+```text
+Sprite sheet: props for Ferro drinking, as in frame 2 of the attached drink.png. No dog in this image.
+
+Row 1: three variants of the same small dog water bowl, side by side and well apart from each other, so I can choose one: 1. red plastic, 2. stainless steel, 3. blue glazed ceramic. Each bowl is seen from the side and a little from above, so the round rim and the water inside are visible: a light blue water surface with one or two white highlight pixels. Low and wide, with a flat bottom standing on the ground line.
+
+Row 2, below the bowls and well apart from them: five single water drops splashed out of a bowl, of different sizes, light blue with a white highlight pixel, each on its own and well apart from the others.
+
+Rules for this sheet:
+- Size: Ferro's scale from the reference. A bowl is about as wide as her head is long (about 18 to 20 pixels) and about 7 to 8 pixels tall, wide enough for her muzzle to fit in when she drinks as in frame 2 of drink.png. A drop is 2 to 4 pixels. Do not draw them bigger.
+- Same pixel-art style as Ferro: crisp hard pixels, dark 1-pixel outline on the bowls, no anti-aliasing, no gradients.
+- No dog, no grass, no ground, no shadow, no text.
+- New colours only for the bowls and the water. Never magenta or purple.
+```
