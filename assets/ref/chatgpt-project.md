@@ -191,6 +191,76 @@ Rules for this sheet:
 - All 4 frames stand on the same ground line. No grass, no ground, no shadow.
 ```
 
+## Messages for four new stops (7.10.2026)
+
+Vatra wants more variety: she sat in 42% of all stops. He chose the stops from what the real Ferro does on a walk: she stops and looks around, stops and listens, eats a piece of bread off the ground, and scratches behind her ear. There are three sheets, because looking around and listening share one standing body. ChatGPT redraws the body in every frame, so `build.py` will put each frame's head on one body, as `lap()` does for drinking. Small movements (an ear twitch while she listens, the chewing) are derived in code where they can be. Slowing down with her head lowering before the bread is sniff-0, as for drinking.
+
+### Looking around and listening (save as `assets/src/stand.png`)
+
+Attach `ferro-ref.png` and `assets/src/drink.png`. Looking around plays frames 1, 2, 3, 4, 3, 2; listening plays 1, 2, 5, 6, 5, 2.
+
+```text
+Sprite sheet: Ferro stops running and stands still, looking around and listening. 6 frames, left to right:
+1. Slowing from a run to a stop, last step, head up and looking ahead.
+2. Standing still on all four paws, as in frame 5 of the attached drink.png: head up in profile looking right, ears up, mouth closed, tail up.
+3. The same standing body, head turned three-quarters towards the viewer, looking off to the side past the viewer.
+4. The same standing body, head turned back over her near shoulder, looking behind her to the left.
+5. The same standing body, listening: head raised a little higher than in frame 2, both ears pricked up high and pointing forward, looking far ahead to the right.
+6. The same as frame 5 with the head tilted slightly to one side.
+
+Rules for this sheet:
+- In frames 2 to 6 the body, legs and tail are identical, pixel for pixel, in the same position. Only the head and neck move.
+- Mouth closed in every frame, no tongue.
+- Measures: the same scale as the frames in the reference. Standing, she is about 40 pixels from ear tips to paws and about 55 pixels long, about a third of the image height, and her head is the same size as in the reference close-ups. Do not draw her bigger.
+- All 6 frames stand on the same ground line, well apart from each other. No grass, no ground, no shadow.
+- Use only the colours from the palette in the reference.
+```
+
+### Eating a piece of bread (save as `assets/src/bread.png`)
+
+Attach `ferro-ref.png` and `assets/src/drink.png`. The bread on its own (row 2) scrolls in with the grass, as the bowl does; the chewing loops frames 4 and 5, then frame 6.
+
+```text
+Sprite sheet: Ferro finds a piece of bread on the ground and eats it. 6 frames, left to right:
+1. Standing still as in frame 2 of the attached drink.png, head down, nose just above a small piece of bread lying on the ground in front of her front paws, sniffing it.
+2. The same standing body, mouth open, picking the bread up with her front teeth.
+3. The same standing body, head lifted halfway, the bread held crosswise in her mouth.
+4. The same standing body, head up in profile looking right, chewing: mouth slightly open, a small bit of bread still showing, one crumb falling.
+5. The same as frame 4, mouth closed, chewing.
+6. The same as frame 5, licking her lips: the tip of the tongue out and curled up over the front of her nose, as in frame 4 of drink.png.
+
+Row 2, below the frames and well apart from them: the same piece of bread on its own, as it lies on the ground in frame 1.
+
+Rules for this sheet:
+- In all 6 frames the body, legs and tail are identical, pixel for pixel, in the same position. Only the head and neck move.
+- The bread: a small torn piece of white bread with a golden-brown crust. About 8 pixels wide and 4 tall in Ferro's scale: about a seventh of her body length and shorter than her head. Do not draw it bigger.
+- Measures for Ferro: the same scale as the frames in the reference. Standing, she is about 40 pixels from ear tips to paws and about 55 pixels long, about a third of the image height, and her head is the same size as in the reference close-ups. Do not draw her bigger.
+- The tongue only in frame 6, in the salmon pink of the reference.
+- All 6 frames stand on the same ground line, well apart from each other. No grass, no ground, no shadow.
+- Use only the colours from the palette in the reference; new colours only for the bread.
+```
+
+### Scratching behind the ear (save as `assets/src/scratch.png`)
+
+Attach `ferro-ref.png` and `assets/src/sit.png`. She brakes and sits down with sit-0 and sit-1, as when she sits; the scratching loops frames 2, 3, 4, 3 fast, then frame 5, and she gets up as from sitting.
+
+```text
+Sprite sheet: Ferro sits down and scratches behind her ear with a hind leg. 5 frames, left to right:
+1. Sitting upright in side view facing right, as in frame 3 of the attached sit.png: front legs straight, hind legs folded under her, tail on the ground behind her, head in profile.
+2. The same sitting body, head tilted down towards her near side, her near hind leg lifted forward with its paw behind her near ear, scratching.
+3. The same as frame 2 with the paw a little lower, behind her jaw.
+4. The same as frame 2 with the paw a little higher, at the base of her ear.
+5. The near hind leg back down, folded under her as in frame 1, head in profile, eyes half closed, content.
+
+Rules for this sheet:
+- In all 5 frames the front legs, chest, back and tail are identical, pixel for pixel, in the same position. Only the head and the near hind leg move.
+- Frames 2, 3 and 4 differ only in where the scratching paw is and in a small tilt of the head.
+- Measures: the same scale as frame 3 of sit.png, with her head the same size as in the reference close-ups. Standing she would be about 40 pixels from ear tips to paws; sitting she is a little taller and much shorter. Do not draw her bigger.
+- All 5 frames stand on the same ground line, well apart from each other. No grass, no ground, no shadow.
+- Mouth closed in every frame, no tongue.
+- Use only the colours from the palette in the reference.
+```
+
 ## Messages for the props she runs past (7.10.2026)
 
 Props stand on the meadow or in the distance and scroll past while Ferro runs; she does not touch them (Vatra, 7.10.2026). They are a library: one line per prop in a registry, so a new one is one drawing and one line (see "Props she runs past" in CLAUDE.md). `build.py` cuts each figure and scales it to the height the registry gives it, so ChatGPT drawing them too big does not matter as long as the detail is chunky enough for that height. The figures are cut left to right, so the order in the message is the order of the names.
