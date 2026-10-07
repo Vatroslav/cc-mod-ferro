@@ -5,7 +5,8 @@ outline into stray dots (Vatra, 7.10.2026), so a prop is as big as ChatGPT drew 
 too big for its place is drawn again, smaller (MAX_H).
 
 The registry is assets/props.json, one entry per prop: its sheet, where it stands ("ground": on the
-meadow, behind or in front of her; "far": behind the hills) and its chance in percent per slot (see
+meadow, behind or in front of her; "far": behind the hills; "edge": at the far edge of the meadow, in
+front of the forest) and its chance in percent per slot (see
 scene.py). The entries of a sheet name its figures in the order they stand in it: rows top to
 bottom, each left to right. Saves assets/px/prop-<name>.png, and preview/props.html to compare each
 with its drawing.
@@ -28,10 +29,10 @@ MIN_AREA = 4000  # source pixels: smaller specks (the flying cars around the fut
 COLORS = 20
 GRID_PX = (3.0, 16.0)  # the sizes of a ChatGPT pixel looked for, in source pixels
 SUBGRID = 0.7  # see pixel_size
-# The tallest a prop may be: one on the grass behind her stands on row 70 at the highest, and a far
-# one stands behind the hills on row 34 (scene.py). A taller drawing is not shrunk, because that
+# The tallest a prop may be: one on the grass behind her stands on row 70 at the highest, a far one
+# behind the hills on row 34, one at the edge of the meadow in front of the forest on row 56 (scene.py). A taller drawing is not shrunk, because that
 # loses its detail (Vatra, 7.10.2026): ChatGPT draws it again, smaller.
-MAX_H = {"ground": 70, "far": 34}
+MAX_H = {"ground": 70, "far": 34, "edge": 56}
 
 
 def registry() -> list[dict]:
@@ -156,9 +157,10 @@ def main() -> None:
     too_big = []
     names = [p["name"] for p in props]
     assert len(set(names)) == len(names), "two props with the same name"
-    for where in ("ground", "far"):
-        total = sum(p["chance"] for p in props if p["where"] == where)
-        assert total <= 100, f"the chances of the {where} props add up to {total}, over 100"
+    # a ground slot takes a ground prop, a far slot a far one or one at the edge
+    for pool in (("ground",), ("far", "edge")):
+        total = sum(p["chance"] for p in props if p["where"] in pool)
+        assert total <= 100, f"the chances of the {' and '.join(pool)} props add up to {total}, over 100"
     for sheet in dict.fromkeys(p["sheet"] for p in props):
         mine = [p for p in props if p["sheet"] == sheet]
         if not (SRC / f"{sheet}.png").exists():
@@ -175,7 +177,7 @@ def main() -> None:
         size = pixel_size([energies(rgb[box], own) for box, own in found])
         print(f"{sheet}: a ChatGPT pixel is {size:.2f} source pixels")
         for p, (box, own) in zip(mine, found):
-            out = cut(rgb[box], own, size, p["where"] == "ground")
+            out = cut(rgb[box], own, size, p["where"] != "far")
             Image.fromarray(out, "RGBA").save(OUT / f"prop-{p['name']}.png")
             src = np.dstack([rgb[box], np.where(own, 255, 0).astype(np.uint8)])
             Image.fromarray(src, "RGBA").save(PREVIEW_SRC / f"{p['name']}.png")

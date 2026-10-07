@@ -1,4 +1,4 @@
-import { FAR_BASE, PROPS, SCENES, SVG_LIMIT } from './scene'
+import { EDGE_BASE, FAR_BASE, PROPS, SCENES, SVG_LIMIT } from './scene'
 
 type Scene = (typeof SCENES)[number]
 type Program = Scene['programs'][number]
@@ -7,11 +7,13 @@ type Program = Scene['programs'][number]
 export type PropPicks = { ground: number[]; far: number[] }
 
 // The prop a slot gets for a roll in [0, 1), by the chances in percent; -1 for none (what is left
-// to 100). tools/scene.py does the same for its previews (pick_prop).
+// to 100). A ground slot takes a ground prop, a far slot one behind the hills or one at the edge of
+// the meadow, in front of the forest. tools/scene.py does the same for its previews (pick_prop).
 export function pickProp(where: 'ground' | 'far', roll: number): number {
   let r = roll * 100
   for (let i = 0; i < PROPS.length; i++) {
-    if (PROPS[i].where !== where) continue
+    const w = PROPS[i].where
+    if (where === 'ground' ? w !== 'ground' : w !== 'far' && w !== 'edge') continue
     r -= PROPS[i].chance
     if (r < 0) return i
   }
@@ -27,11 +29,14 @@ const use = (i: number, x: number, bottom: number) =>
 
 function compose(s: Scene, p: Program, withBall: boolean, picks: PropPicks): string {
   let far = ''
+  let edge = ''
   let behind = ''
   let front = ''
   p.far.forEach((x, k) => {
     const i = picks.far[k] ?? -1
-    if (i >= 0) far += use(i, x, FAR_BASE)
+    if (i < 0) return
+    if (PROPS[i].where === 'edge') edge += use(i, x, EDGE_BASE)
+    else far += use(i, x, FAR_BASE)
   })
   p.slots.forEach(([x, bottom, inFront], k) => {
     const i = picks.ground[k] ?? -1
@@ -41,8 +46,9 @@ function compose(s: Scene, p: Program, withBall: boolean, picks: PropPicks): str
   })
   const pieces: [number, string][] = [
     [p.marks[0], far],
-    [p.marks[1], behind],
-    [p.marks[2], front],
+    [p.marks[1], edge],
+    [p.marks[2], behind],
+    [p.marks[3], front],
   ]
   if (withBall) pieces.push([p.ballAt, p.ball])
   // from the last index to the first, so each index still points into the program's body

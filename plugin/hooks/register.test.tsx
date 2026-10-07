@@ -176,7 +176,10 @@ test('a slot gets a prop by the chances, the rest of 100 is an empty slot', asyn
   const { PROPS } = await import('./scene')
   const { pickProp } = await import('./run')
   for (const where of ['ground', 'far'] as const) {
-    const mine = PROPS.map((p, i) => ({ ...p, i })).filter(p => p.where === where)
+    // a far slot takes a prop behind the hills or one at the edge of the meadow
+    const mine = PROPS.map((p, i) => ({ ...p, i })).filter(p =>
+      where === 'ground' ? p.where === 'ground' : p.where === 'far' || p.where === 'edge',
+    )
     const total = mine.reduce((s, p) => s + p.chance, 0)
     expect(total).toBeLessThanOrEqual(100)
     if (mine.length === 0) {
@@ -211,7 +214,7 @@ test('every slot taken, with the ball, a run still fits the Svg element limit', 
   const { PROPS, SCENES } = await import('./scene')
   const { runScene } = await import('./run')
   const ground = PROPS.map((q, i) => i).filter(i => PROPS[i].where === 'ground')
-  const far = PROPS.map((q, i) => i).filter(i => PROPS[i].where === 'far')
+  const far = PROPS.map((q, i) => i).filter(i => PROPS[i].where !== 'ground')
   for (const s of SCENES) {
     for (const p of s.programs) {
       const picks = {

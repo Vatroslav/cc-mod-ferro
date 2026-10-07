@@ -90,6 +90,10 @@ PROP_FRONT_SHARE = 0.4  # of the slots that may stand in front of her
 # the bottom row of a far prop: below the lowest valley of the hills (row 28 of the band), so the
 # hills hide it everywhere and only the top shows
 FAR_BASE = 34
+# the bottom row of a prop at the far edge of the meadow, in front of the forest ("edge": the ships,
+# Vatra, 7.10.2026, there and taller than the trees, so they look huge): the grass starts on row 55
+# and hides the row below it. They move with the hills and the forest.
+EDGE_BASE = 56
 DOG_W = 76  # her canvas
 
 # Pooping in one spot: (frame, seconds) of poop.png
@@ -477,8 +481,9 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
     # far props behind the hills, ground props behind her on the grass
     layers = (
         clouds_layer(meadow)
-        + f"<g>{linear(back_pts, period)}{PROP_MARKS[0]}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}</g>"
-        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}{PROP_MARKS[1]}</g>"
+        + f"<g>{linear(back_pts, period)}{PROP_MARKS[0]}{tiles('back', y_back, mw, ground_total * BACK_RATIO)}"
+        f"{PROP_MARKS[1]}</g>"
+        + f"<g>{linear(ground_pts, period)}{tiles('ground', y_ground, mw, ground_total)}{PROP_MARKS[2]}</g>"
     )
 
     # what she leaves on the meadow: placed where the ground is when it appears, then it scrolls
@@ -509,16 +514,21 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
         for id_, x, y, s, ws in fronts
     )
     # the props in front of her go in the same group
-    front_el = f"<g>{linear(ground_pts, period)}{front}{PROP_MARKS[2]}</g>"
+    front_el = f"<g>{linear(ground_pts, period)}{front}{PROP_MARKS[3]}</g>"
 
     ball_el = ball_layer(ground_pts, shift_pts, stops, period, dog_x, dog_y) if ball else ""
     return (layers + left_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
             + front_el + "</svg>")
 
 
-# Where run_body leaves room for the props: far, behind her, in front of her. take_marks removes
-# them and returns where they were, and the mod inserts the props there.
-PROP_MARKS = ("<!--far-->", "<!--behind-->", "<!--front-->")
+# Where run_body leaves room for the props, in the order they stand in the body: far (behind the
+# hills), at the edge (in front of the forest), behind her, in front of her. take_marks removes them
+# and returns where they were, and the mod inserts the props there.
+PROP_MARKS = ("<!--far-->", "<!--edge-->", "<!--behind-->", "<!--front-->")
+# The tallest a prop may be in each place, so its top stays in the band (or, behind her, on the grass).
+PROP_TALLEST = {"ground": PROP_BEHIND[0], "far": FAR_BASE, "edge": EDGE_BASE}
+# The far slots take a far prop or one at the edge.
+DISTANT = ("far", "edge")
 
 
 def take_marks(body: str) -> tuple[str, list[int]]:
@@ -540,7 +550,7 @@ def load_props() -> list[dict]:
             print(f"prop {p['name']} left out: not drawn yet")
             continue
         p["w"], p["h"] = size(f"prop-{p['name']}.png")
-        tallest = PROP_BEHIND[0] if p["where"] == "ground" else FAR_BASE
+        tallest = PROP_TALLEST[p["where"]]
         if p["h"] > tallest:
             print(f"prop {p['name']} left out: {p['h']} pixels tall, at most {tallest}")
             continue
@@ -575,11 +585,11 @@ def prop_slots(ground_pts: list, stops: list[tuple[float, float]], dog_x: int, r
 
 
 def pick_prop(props: list[dict], where: str, roll: float) -> int:
-    """The prop a slot gets for a roll in [0, 1), by the chances; -1 for none. The mod does the
-    same in run.ts."""
+    """The prop a slot gets for a roll in [0, 1), by the chances; -1 for none. A ground slot takes
+    a ground prop, a far slot a far one or one at the edge (DISTANT). The mod does the same in run.ts."""
     r = roll * 100
     for i, p in enumerate(props):
-        if p["where"] == where:
+        if p["where"] == where or (where == "far" and p["where"] in DISTANT):
             r -= p["chance"]
             if r < 0:
                 return i
@@ -590,8 +600,12 @@ def with_props(body: str, marks: list[int], slots: list, far: list, props: list[
                picks: dict, ball: tuple[str, int] | None = None) -> str:
     """The body with the picked props (and the ball) put in, as the mod does in run.ts."""
     used = sorted({i for i in picks["ground"] + picks["far"] if i >= 0})
-    far_s = "".join(f'<use href="#prop-{props[i]["name"]}" x="{x}" y="{FAR_BASE - props[i]["h"] + 1}"/>'
-                    for x, i in zip(far, picks["far"]) if i >= 0)
+    far_s, edge = "", ""
+    for x, i in zip(far, picks["far"]):
+        if i >= 0 and props[i]["where"] == "edge":
+            edge += f'<use href="#prop-{props[i]["name"]}" x="{x}" y="{EDGE_BASE - props[i]["h"] + 1}"/>'
+        elif i >= 0:
+            far_s += f'<use href="#prop-{props[i]["name"]}" x="{x}" y="{FAR_BASE - props[i]["h"] + 1}"/>'
     behind, front = "", ""
     for (x, row, in_front), i in zip(slots, picks["ground"]):
         if i >= 0:
@@ -600,7 +614,7 @@ def with_props(body: str, marks: list[int], slots: list, far: list, props: list[
                 front += use
             else:
                 behind += use
-    pieces = [(marks[0], far_s), (marks[1], behind), (marks[2], front)] + ([ball[::-1]] if ball else [])
+    pieces = [(marks[0], far_s), (marks[1], edge), (marks[2], behind), (marks[3], front)] + ([ball[::-1]] if ball else [])
     for at_, piece in sorted(pieces, key=lambda t: -t[0]):
         body = body[:at_] + piece + body[at_:]
     defs = "".join(props[i]["def"] for i in used)
@@ -902,11 +916,12 @@ def main() -> None:
                     # the last ones came after 100 s and Vatra never saw the ships, 7.10.2026)
                     ground_i = sorted((j for j, p in enumerate(props) if p["where"] == "ground"),
                                       key=lambda j: props[j]["chance"])
-                    far_i = sorted((j for j, p in enumerate(props) if p["where"] == "far"),
+                    far_i = sorted((j for j, p in enumerate(props) if p["where"] in DISTANT),
                                    key=lambda j: props[j]["chance"])
                     step = widest + 80
                     show_slots = [[VW + 80 + n * step, PROP_BEHIND[1], 0] for n in range(len(ground_i))]
-                    show_far = [VW + 80 + n * 200 for n in range(len(far_i))]
+                    far_step = max((props[j]["w"] for j in far_i), default=0) + 40
+                    show_far = [VW + 40 + n * far_step for n in range(len(far_i))]
                     every = {"ground": ground_i, "far": far_i}
                     (preview / "props-every.svg").write_text(
                         head + with_props(plain, marks, show_slots, show_far, props, every), encoding="utf-8")
@@ -938,6 +953,7 @@ def main() -> None:
         f"export const SLEEP_INTRO_MS = {round(SLEEP_INTRO_S * 1000)}\n"
         f"export const SVG_LIMIT = {SVG_LIMIT}\n"
         f"export const FAR_BASE = {FAR_BASE}\n"
+        f"export const EDGE_BASE = {EDGE_BASE}\n"
         f"export const PROPS = {json.dumps([{k: p[k] for k in ('name', 'where', 'chance', 'h', 'def')} for p in props])}\n"
         f"export const SCENES = {json.dumps(scenes)}\n"
     )
