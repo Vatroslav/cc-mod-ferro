@@ -60,7 +60,8 @@ GAP_S = (12.0, 22.0)  # seconds of running between two stops
 SEED = 6
 WEIGHTS = {"sit": 0.5, "sniff": 0.2, "walkPoop": 0.2, "stillPoop": 0.1}
 POOPS = {"walkPoop", "stillPoop"}
-SAYS = {"sit": "sits", "sniff": "sniffs", "walkPoop": "poops while walking", "stillPoop": "poops in one spot"}
+SAYS = {"sit": "sits", "sniff": "sniffs", "walkPoop": "poops while walking", "stillPoop": "poops in one spot",
+        "drink": "drinks"}
 
 # Pooping in one spot: (frame, seconds) of poop.png
 POOP = [(0, 0.5), (1, 0.35), (2, 0.35), (3, 1.3), (4, 1.6), (5, 0.45)]
@@ -169,9 +170,11 @@ def at(points: list[tuple[float, float]], t: float) -> float:
 
 
 def cycle(prefix: str, frames: list, frame_s: float) -> str:
-    """Frames shown one after another in their own fast loop."""
+    """Frames shown one after another in their own fast loop; None is a slot with nothing."""
     out = ""
     for slot, frame in enumerate(frames):
+        if frame is None:
+            continue
         vals = ";".join("visible" if j == slot else "hidden" for j in range(len(frames)))
         out += (
             f'<use href="#{prefix}{frame}" visibility="hidden"><animate attributeName="visibility" '
@@ -217,13 +220,17 @@ class Stop:
     `stills`: the windows in which each drawing shows on her canvas.
     `sprites`: the file of every sprite id the stop uses.
     `cycles`: frames looping within a window, (prefix, frames, seconds per frame, start, end).
-    `props`: what she leaves on the meadow, (sprite id, second it appears, x, y on her canvas)."""
+    `props`: what she leaves on the meadow, (sprite id, second it appears, x, y on her canvas).
+    `front`: what lies on the meadow in front of her and scrolls with the ground, (sprite id, x, y
+    on her canvas at second `at`, at, windows in which it shows); a window may start before the
+    stop, while she still runs."""
     dur: float
     ground: list[tuple[float, float]]
     stills: dict[str, list[tuple[float, float]]]
     sprites: dict[str, str]
-    cycles: list[tuple[str, list[int], float, float, float]] = field(default_factory=list)
+    cycles: list[tuple[str, list, float, float, float]] = field(default_factory=list)
     props: list[tuple[str, float, int, int]] = field(default_factory=list)
+    front: list[tuple[str, int, int, float, list[tuple[float, float]]]] = field(default_factory=list)
 
 
 def sequence(frames: list[tuple[str, float]]) -> tuple[dict[str, list[tuple[float, float]]], float]:
@@ -335,7 +342,39 @@ def sniff() -> Stop:
     )
 
 
-STOPS = {"sit": sit, "sniff": sniff, "walkPoop": walk_poop, "stillPoop": still_poop}
+# Drinking from the red bowl, approached like sniffing (Vatra, 7.10.2026): the bowl comes in with
+# the grass, she slows down and lowers her head (sniff-0) and stops at it, laps, lifts her head
+# (sniff-0 again) and runs on, and the bowl scrolls away. Lapping loops the frames of drink-lap.png
+# as 1, 2, 3, 4 and 3 again without its drops (Vatra). The lapping frames have the bowl drawn in;
+# the bowl on its own lies in front of her while she runs to it and away from it, and hides while
+# she laps, where it would cover her tongue in the water.
+LAP_ORDER = [0, 1, 2, 3, 2]
+LAP_DROPS = [None, 1, 2, 3, None]
+LAP_FRAME_S = 0.15
+LAPS = 5
+BOWL_LEAD_S = 6.0  # seconds before she stops that the bowl starts coming in, off the right edge
+BOWL_AFTER_S = 6.0  # seconds after she runs on that it is still there, until it is off the left edge
+
+
+def drink() -> Stop:
+    turn_s, turn_px = SNIFF_TURN
+    lap_end = turn_s + LAPS * len(LAP_ORDER) * LAP_FRAME_S
+    end = lap_end + turn_s
+    bowl = json.loads((PX / "drink-lap.json").read_text())["bowl"]
+    sprites = {"n0": "sniff-0.png", "bowl": "drink-lap-bowl.png"}
+    sprites |= {f"l{i}": f"drink-lap-{i}.png" for i in set(LAP_ORDER)}
+    sprites |= {f"ld{i}": f"drink-lap-drops-{i}.png" for i in LAP_DROPS if i is not None}
+    return Stop(
+        dur=end,
+        ground=[(0, 0), (turn_s, turn_px), (lap_end, turn_px), (end, 2 * turn_px)],
+        stills={"n0": [(0, turn_s), (lap_end, end)]},
+        sprites=sprites,
+        cycles=[("l", LAP_ORDER, LAP_FRAME_S, turn_s, lap_end), ("ld", LAP_DROPS, LAP_FRAME_S, turn_s, lap_end)],
+        front=[("bowl", bowl["x"], bowl["y"], turn_s, [(-BOWL_LEAD_S, turn_s), (lap_end, end + BOWL_AFTER_S)])],
+    )
+
+
+STOPS = {"sit": sit, "sniff": sniff, "walkPoop": walk_poop, "stillPoop": still_poop, "drink": drink}
 
 
 def run_head(meadow: dict, stops: dict[str, Stop]) -> str:
@@ -358,6 +397,7 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
     stills: dict[str, list[tuple[float, float]]] = {}
     cycles: dict[tuple, list[tuple[float, float]]] = {}
     props: list[tuple[str, float, int, int]] = []
+    fronts: list[tuple[str, int, int, float, list[tuple[float, float]]]] = []
     for run_s, stop in program:
         t += run_s
         d += run_s * RUN_SPEED
@@ -367,6 +407,7 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
         for prefix, frames, frame_s, a, b in stop.cycles:
             cycles.setdefault((prefix, tuple(frames), frame_s), []).append((t + a, t + b))
         props += [(id_, t + s, x, y) for id_, s, x, y in stop.props]
+        fronts += [(id_, x, y, t + s, [(t + a, t + b) for a, b in ws]) for id_, x, y, s, ws in stop.front]
         stops.append((t, t + stop.dur))
         t += stop.dur
         d += stop.ground[-1][1]
@@ -404,8 +445,18 @@ def run_body(meadow: dict, dog_x: int, dog_y: int, program: list[tuple[float, St
     for (prefix, frames, frame_s), ws in cycles.items():
         dog += f'<g display="none">{windows(ws, period)}{cycle(prefix, list(frames), frame_s)}</g>'
 
+    # in front of her: placed where the ground is at second `at`, shown only in its windows
+    front = "".join(
+        f'<use href="#{id_}" x="{round(dog_x + x - at(ground_pts, s))}" y="{dog_y + y}" display="none">'
+        + windows(ws, period)
+        + "</use>"
+        for id_, x, y, s, ws in fronts
+    )
+    front_el = f"<g>{linear(ground_pts, period)}{front}</g>" if front else ""
+
     ball_el = ball_layer(ground_pts, stops, period, dog_x, dog_y) if ball else ""
-    return layers + left_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g></svg>'
+    return (layers + left_el + ball_el + f'<g transform="translate({dog_x} {dog_y})">{dog}</g>'
+            + front_el + "</svg>")
 
 
 # The orange ball she chases: it bounces ahead of her while she runs, rolls on and comes to
@@ -632,8 +683,15 @@ def main() -> None:
         height = meadow["sky_h"] + meadow["back_h"] + meadow["ground_h"]
         dog_x = VW // 2 - dog_w // 2 - 20
         dog_y = height - dog_h - 2
-        head = run_head(meadow, stops)
+        # the mod's head has the drawings of the stops in WEIGHTS only: a stop not yet in the
+        # programs (drinking, until its share is set) shows in its preview alone
+        head = run_head(meadow, {kind: stops[kind] for kind in WEIGHTS})
         prefix = "" if k == 0 else f"{name}-"
+        for kind in (kind for kind in stops if kind not in WEIGHTS):
+            program = [(RUN_BEFORE, stops[kind])]
+            own_head = run_head(meadow, {kind: stops[kind]})
+            (preview / f"{prefix}{kind}.svg").write_text(own_head + run_body(meadow, dog_x, dog_y, program),
+                                                         encoding="utf-8")
 
         # one stop per scene, for the README and for looking at one kind of stop
         for kind, file in (("walkPoop", "run"), ("stillPoop", "run-still"), ("sit", "sit"), ("sniff", "sniff")):

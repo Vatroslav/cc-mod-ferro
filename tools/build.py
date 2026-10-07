@@ -523,11 +523,12 @@ def sniff_bob(palette: np.ndarray, dark: set, outline: int) -> None:
 # bowl drawn in, and the drops flying out beside it as figures of their own. The bowl and the water
 # are not dog colours: they get a palette of their own (LAP_PROP_COLORS, median cut over them),
 # appended after the dog's. The bowl is the largest red patch of a frame (the red is far more
-# saturated than the tongue: green under 0.3 of red, the tongue above 0.45). Every frame is placed
-# so the bowl stays put (its right edge at LAP_BOWL_X) and the paws stand on the usual ground row
-# (CANVAS_H - 1); the bowl stands closer to the viewer and reaches lower, so the canvas is taller.
-# The drops are saved apart (drink-lap-drop-<frame>-<i>.png, positions in drink-lap-drops.json),
-# so a frame can show without them.
+# saturated than the tongue: green under 0.3 of red, the tongue above 0.45). Every frame is first
+# placed so the bowl stays put (its right edge at LAP_BOWL_X) and the paws stand on the usual
+# ground row (CANVAS_H - 1); the bowl stands closer to the viewer and reaches lower, so the canvas
+# is taller. The drops of each frame go on a canvas of their own (drink-lap-drops-<frame>.png), so
+# a frame can show without them, and the bowl on its own (drink-lap-bowl.png, its place in
+# drink-lap.json), for when she runs to it and away from it.
 # ChatGPT redrew her whole body in every frame, so she swayed as if dancing (Vatra, 7.10.2026: her
 # body is still while she drinks). Every frame therefore has the body and the bowl of frame
 # LAP_BASE and its own head (Vatra: a head from every frame, one body): the frame is laid on the
@@ -641,6 +642,12 @@ def lap(palette: np.ndarray, tongue_n: int, dark: set, outline: int) -> None:
     rows = np.arange(LAP_CANVAS_H)[:, None]
     head_area = (((cols >= LAP_HEAD_X) & (rows <= LAP_NECK_Y))
                  | ((cols >= LAP_CHIN_X) & (rows <= bowl_top(base))))
+    # in the end the right edge of her head goes to NOSE_X["sniff"], like in the sniff frames: her
+    # ear and muzzle then lie where they are in sniff-0, which takes her down to the bowl
+    dog = (base != transparent) & ~base_bowl
+    head_x = int(np.where(dog[: bowl_top(base)].any(0))[0].max())
+    move = NOSE_X["sniff"] - head_x
+    outs = []
     for n, a in enumerate(canvases):
         # the shift that lays this frame's body over the base's
         dx, dy = min(
@@ -653,26 +660,34 @@ def lap(palette: np.ndarray, tongue_n: int, dark: set, outline: int) -> None:
         out[head_area & ~base_bowl] = transparent
         head = (head_area & (a != transparent) & ~bowl_of(a)) | mouth_tongue(a)
         out[head] = a[head]
-        image(out).save(OUT / f"{LAP}-{n}.png")
+        outs.append(out)
+        image(shifted(out, move, 0, transparent)).save(OUT / f"{LAP}-{n}.png")
         print(LAP, n, "head on the base body, shifted", dx, dy)
 
-    # each drop belongs to the frame on its left
-    positions: dict[int, list] = {}
+    # the bowl on its own, for when she runs to it and away from it
+    bowl = shifted(np.where(base_bowl, base, transparent), move, 0, transparent)
+    ys, xs = np.where(bowl != transparent)
+    image(bowl[ys.min() : ys.max() + 1, xs.min() : xs.max() + 1]).save(OUT / f"{LAP}-bowl.png")
+    (OUT / f"{LAP}.json").write_text(json.dumps({"bowl": {"x": int(xs.min()), "y": int(ys.min())}}))
+    print(LAP, "head at", NOSE_X["sniff"], "bowl at", int(xs.min()), int(ys.min()))
+
+    # the drops of each frame on a canvas of their own, so a frame can show without them; each
+    # drop belongs to the frame on its left
+    layers = {}
     for box, own in drops:
         n = max(i for i, (fb, _, _) in enumerate(placed) if fb[1].start < box[1].start)
         fb, fx, fy = placed[n]
         crop = idx[box].copy()
         crop[~own] = transparent
         px = downsample(crop, LAP_FACTOR, transparent)
-        k = len(positions.setdefault(n, []))
-        image(px).save(OUT / f"{LAP}-drop-{n}-{k}.png")
-        positions[n].append({
-            "x": fx + int(round((box[1].start - fb[1].start) / LAP_FACTOR)),
-            "y": fy + int(round((box[0].start - fb[0].start) / LAP_FACTOR)),
-            "w": px.shape[1], "h": px.shape[0],
-        })
-    (OUT / f"{LAP}-drops.json").write_text(json.dumps(positions))
-    print(LAP, "drops", {n: len(v) for n, v in positions.items()})
+        x = fx + int(round((box[1].start - fb[1].start) / LAP_FACTOR)) + move
+        y = fy + int(round((box[0].start - fb[0].start) / LAP_FACTOR))
+        layer = layers.setdefault(n, np.full(base.shape, transparent, dtype=np.int16))
+        spot = layer[y : y + px.shape[0], x : x + px.shape[1]]
+        spot[px != transparent] = px[px != transparent]
+    for n, layer in sorted(layers.items()):
+        image(layer).save(OUT / f"{LAP}-drops-{n}.png")
+    print(LAP, "drops on frames", sorted(layers))
 
 
 def main() -> None:
