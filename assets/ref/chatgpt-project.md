@@ -250,3 +250,59 @@ Rules for this sheet:
 - New colours only for this object. Never magenta or purple.
 - Flat solid pure magenta (#FF00FF) background, no text, no labels.
 ```
+
+### Far buildings again, smaller (7.10.2026)
+
+All six far buildings came out too tall for their place (`tools/props.py`): tower 67 rows, town 55, Orthanc 68, Barad-dur 72, Minas Tirith 57, the future city 89, against at most 34 behind the hills. Shrinking them loses their detail, so ChatGPT draws them again with bigger pixels. Each message attaches the sheet it redraws, so the look stays, and `ferro-meadow.png`. The bottom of a far building stands behind the hills, so only its top 20-28 rows show: the parts that make it recognisable go in the top two thirds.
+
+Measures are given as a grid over the whole image and as a share of its height, not only as pixel counts (see "Measures in a message" in CLAUDE.md): the first sheets asked for pixel counts and came out 1.4 to 2.5 times bigger.
+
+Tower and town (attach `assets/src/props-far.png` and `ferro-meadow.png`; save as `assets/src/props-far.png`):
+
+```text
+Redraw the attached image (the tower and the town) with much bigger pixels, so each building has far fewer pixels. Same two buildings, same pale hazy bluish colours, same composition, on the same flat solid pure magenta (#FF00FF) background.
+
+Measures:
+- Draw the whole image as a grid of 128 pixels across and 64 pixels down: every pixel is one solid square block, 1/128 of the image width. No smaller detail than one block.
+- The tower: 14 pixels wide and 30 pixels tall, including the little hill under it. That is less than half the height of the image.
+- The town: 60 pixels wide and 26 pixels tall, including its hill. Also less than half the height of the image.
+- Both stand on the same flat bottom line, near the bottom of the image, well apart from each other.
+
+Rules for this sheet:
+- The bottom third of each building will be hidden behind hills, so keep what makes it recognisable (the battlements and the flag, the steeple and the red roofs) in its top two thirds.
+- Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
+- No text, no labels.
+```
+
+Orthanc, Barad-dur and Minas Tirith (attach `assets/src/props-far-fantasy.png` and `ferro-meadow.png`; save as `assets/src/props-far-fantasy.png`):
+
+```text
+Redraw the attached image (the three towers and cities) with much bigger pixels, so each one has far fewer pixels. Same three, left to right, same pale hazy bluish colours, the same glowing orange eye on the middle tower, on the same flat solid pure magenta (#FF00FF) background.
+
+Measures:
+- Draw the whole image as a grid of 128 pixels across and 64 pixels down: every pixel is one solid square block, 1/128 of the image width. No smaller detail than one block.
+- Left, the black spire: 18 pixels wide and 32 pixels tall, including the hills under it.
+- Middle, the dark tower with the eye: 26 pixels wide and 32 pixels tall, including the mountain under it.
+- Right, the white city: 36 pixels wide and 28 pixels tall, including the hills under it.
+- Each is about half the height of the image or less. All three stand on the same flat bottom line, near the bottom of the image, well apart from each other.
+
+Rules for this sheet:
+- The bottom third of each will be hidden behind hills, so keep what makes it recognisable (the four horns of the spire, the eye, the white tiers and the tower of the city) in its top two thirds.
+- Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
+- No text, no labels.
+```
+
+The future city (attach `assets/src/props-far-future.png` and `ferro-meadow.png`; save as `assets/src/props-far-future.png`):
+
+```text
+Redraw the attached image (the futuristic city) with much bigger pixels, so it has far fewer pixels. Same city, same pale hazy blue colours with small yellow windows, on the same flat solid pure magenta (#FF00FF) background, without the small flying vehicles.
+
+Measures:
+- Draw the whole image as a grid of 128 pixels across and 64 pixels down: every pixel is one solid square block, 1/128 of the image width. No smaller detail than one block.
+- The city: 84 pixels wide and 30 pixels tall, from its flat bottom line to the tip of the tallest tower. That is less than half the height of the image. It stands near the bottom of the image.
+
+Rules for this sheet:
+- The bottom third will be hidden behind hills, so keep what makes it recognisable (the tallest towers, the saucer-topped tower, the bridges) in its top two thirds.
+- Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
+- No text, no labels.
+```
