@@ -41,7 +41,9 @@ RUN_ORDER = [4, 3, 2, 5, 0]
 # The loop closes when the ground has travelled a whole number of GROUND_TILES meadow widths:
 # then the hills (at BACK_RATIO of the speed) have travelled a whole number of widths too (7 per
 # 20), and the loop continues without a jump.
-RUN_BEFORE = 5.0  # seconds of running before the first stop (16 until 7.10.2026)
+# seconds of running before the stop of a scene with one stop (the README previews), the middle of
+# GAP_S; a program draws its first gap from GAP_S like every later one
+RUN_BEFORE = 9.0
 GROUND_TILES = 20
 BACK_RATIO = 0.35
 FINAL_RUN_MIN_S = 12.0  # at least this much running after the last stop, before the loop starts again
@@ -61,8 +63,7 @@ RUN_START = [(0.0, 0.0), (0.25, 6.0), (0.5, 20.0)]
 PROGRAM_S = 160
 PROGRAMS = 10  # per background
 # seconds of running between two stops. 12-22 until 7.10.2026, when Vatra wanted less waiting for
-# something to happen: at 5 s before the first stop and 6-12 s between, a turn that ends at 79 s
-# sees about 4 stops instead of 2
+# something to happen (the first stop came after 16 s then)
 GAP_S = (6.0, 12.0)
 SEED = 6
 # drinking came in at 0.1 of the first stops, taken from sitting (7.10.2026), so the other shares
@@ -593,7 +594,9 @@ def draw_programs(rng: random.Random, stops: dict[str, Stop]) -> list[list[tuple
     assert len(firsts) == PROGRAMS, "the WEIGHTS shares must come out whole in PROGRAMS"
     programs = []
     for kind in firsts:
-        program, t, pooped = [(RUN_BEFORE, kind)], RUN_BEFORE + stops[kind].dur, kind in POOPS
+        # the first stop comes after a gap like every later one (Vatra, 7.10.2026)
+        first_s = round(rng.uniform(*GAP_S), 1)
+        program, t, pooped = [(first_s, kind)], first_s + stops[kind].dur, kind in POOPS
         while True:
             run_s = round(rng.uniform(*GAP_S), 1)
             if t + run_s >= PROGRAM_S:
