@@ -30,9 +30,10 @@ COLORS = 20
 GRID_PX = (3.0, 16.0)  # the sizes of a ChatGPT pixel looked for, in source pixels
 SUBGRID = 0.7  # see pixel_size
 # The tallest a prop may be: one on the grass behind her stands on row 70 at the highest, a far one
-# behind the hills on row 34, one at the edge of the meadow in front of the forest on row 56 (scene.py). A taller drawing is not shrunk, because that
+# behind the hills with its top 2 rows below the top of the band and its bottom above row 55, one at
+# the edge of the meadow in front of the forest on row 56 (scene.py). A taller drawing is not shrunk, because that
 # loses its detail (Vatra, 7.10.2026): ChatGPT draws it again, smaller.
-MAX_H = {"ground": 70, "far": 34, "edge": 56}
+MAX_H = {"ground": 70, "far": 53, "edge": 56}
 
 
 def registry() -> list[dict]:

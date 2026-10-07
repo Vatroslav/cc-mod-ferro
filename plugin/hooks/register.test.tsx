@@ -53,14 +53,16 @@ test("short turn: for the first 20 s the band is Claude Code's", async ($: any, 
   expect(isEngine).toBe(true)
 })
 
-test('after 20 s Ferro runs, after 3 min she sleeps, on the same background', async ($: any, on) => {
+test('after 20 s Ferro runs, after 5 min she sleeps, on the same background', async ($: any, on) => {
   const { clock } = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(20_000)
   const run = (await band($)).svg?.props.alt
   const place = run.match(/^Ferro (?:running|chasing an orange ball) across (the (?:autumn |winter )?meadow)$/)
   expect(place).not.toBeNull()
-  await clock.advance(160_000)
+  await clock.advance(279_999)
+  expect((await band($)).svg?.props.alt).toBe(run)
+  await clock.advance(1)
   expect((await band($)).svg?.props.alt).toBe(`Ferro asleep on ${place[1]}`)
 })
 
@@ -68,7 +70,7 @@ test('once she has lain down she sleeps on without lying down again', async ($: 
   const { SCENES, SLEEP_INTRO_MS } = await import('./scene')
   const { clock } = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
-  await clock.advance(180_000)
+  await clock.advance(300_000)
   const lying = (await band($)).svg?.props
   const s = SCENES.find(s => s.sleep === lying.source)
   expect(s).toBeDefined()

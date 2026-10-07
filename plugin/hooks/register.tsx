@@ -9,7 +9,7 @@ import { SCENE_MAX_WIDTH, SCENES, SLEEP_INTRO_MS } from './scene'
 // Ferro comes out only when a turn lasts longer than this, so short answers do not flash the band.
 const RUN_AFTER_MS = 20_000
 // When Claude works for too long, Ferro lies down and falls asleep.
-const SLEEP_AFTER_MS = 180_000
+const SLEEP_AFTER_MS = 300_000
 const PX_PER_COLUMN = 8
 // In about a third of the turns she chases an orange ball.
 const BALL_SHARE = 1 / 3

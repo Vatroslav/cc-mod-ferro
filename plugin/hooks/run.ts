@@ -1,4 +1,4 @@
-import { EDGE_BASE, FAR_BASE, PROPS, SCENES, SVG_LIMIT } from './scene'
+import { PROPS, SCENES, SVG_LIMIT } from './scene'
 
 type Scene = (typeof SCENES)[number]
 type Program = Scene['programs'][number]
@@ -35,8 +35,9 @@ function compose(s: Scene, p: Program, withBall: boolean, picks: PropPicks): str
   p.far.forEach((x, k) => {
     const i = picks.far[k] ?? -1
     if (i < 0) return
-    if (PROPS[i].where === 'edge') edge += use(i, x, EDGE_BASE)
-    else far += use(i, x, FAR_BASE)
+    // a far or edge prop stands on its own row (a tall far one lower, behind the hills)
+    if (PROPS[i].where === 'edge') edge += use(i, x, PROPS[i].bottom)
+    else far += use(i, x, PROPS[i].bottom)
   })
   p.slots.forEach(([x, bottom, inFront], k) => {
     const i = picks.ground[k] ?? -1
