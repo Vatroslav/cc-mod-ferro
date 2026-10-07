@@ -133,6 +133,27 @@ TOES_X = {"sit": 54, "drink": 54, "stand": 45, "bread": 45}
 NOSE_X = {"sniff": 58}
 
 
+# Sheets where she stands still and only her head moves: ChatGPT drew one body in every frame, so
+# the frames are used as drawn (Vatra, 7.10.2026: pasting each head on one body broke the faces).
+# A frame is laid on its base frame by the silhouette of her hindquarters (left of SETTLE_X on the
+# canvas): its toes can mislead, with a piece of bread held at the ground or the paws drawn a
+# little further back. bread-0 and bread-1 lean forward with the head down and a body 6-7 px
+# shorter; laid by the hindquarters too, she keeps her hind legs and tail in place and reaches.
+SETTLE = {"stand": {2: 1, 3: 1, 4: 1, 5: 1}, "bread": {0: 3, 1: 3, 2: 3, 4: 3, 5: 3}}  # frame: base frame
+SETTLE_X = 30
+
+
+def settle_x(px: np.ndarray, y: int, base: np.ndarray, base_x: int, base_y: int, transparent: int) -> int:
+    """x of a frame that lays its hindquarters best on those of the base frame at base_x."""
+    m = 40  # margin, so a frame placed off the canvas is still compared whole
+    def mask(a: np.ndarray, x: int, y: int) -> np.ndarray:
+        out = np.zeros((CANVAS_H + 2 * m, CANVAS_W + 2 * m), dtype=bool)
+        out[y + m : y + m + a.shape[0], x + m : x + m + a.shape[1]] = a != transparent
+        return out[:, : SETTLE_X + m]
+    target = mask(base, base_x, base_y)
+    return min(range(base_x - 30, base_x + 31), key=lambda x: int((mask(px, x, y) != target).sum()))
+
+
 def ear_right(px: np.ndarray, transparent: int) -> int:
     """Right edge of the top quarter of the figure: that is the right ear (the tail is left)."""
     solid = px != transparent
@@ -528,57 +549,6 @@ def sniff_bob(palette: np.ndarray, dark: set, outline: int) -> None:
     print("sniff-up from", SNIFF_FROM, "columns", SNIFF_HEAD_X, "and right")
 
 
-# Standing still while only her head moves (looking around, listening, chewing). ChatGPT redraws the
-# body in every frame, so she would sway as she did while drinking (Vatra, 7.10.2026: her body is
-# still). As in lap(), each frame's head goes on the body of one base frame: the frame is laid on
-# the base by the silhouette outside the head, and only its head and neck go on top: right of
-# HEAD_X down to NECK_Y (where the head turned back over her shoulder lies too, right of the tail),
-# and right of CHIN_X down to CHIN_Y (the muzzle and the chest above the front legs). With her head
-# down to the bread (bread-0 and bread-1) everything right of the hips is the head's: she leans
-# forward on her front legs, so those frames have a body of their own.
-# sheet, base frame, frames that get its body, HEAD_X, NECK_Y, CHIN_X, CHIN_Y
-ONE_BODY = [
-    ("stand", 1, [2, 3, 4, 5], 31, 22, 46, 30),
-    ("bread", 3, [2, 4, 5], 31, 22, 46, 30),
-    ("bread", 0, [1], 44, 43, 44, 43),
-]
-
-
-def one_body(name: str, base_i: int, members: list, head_x: int, neck_y: int, chin_x: int, chin_y: int,
-             palette: np.ndarray, dark: set, outline: int) -> None:
-    base = np.asarray(Image.open(OUT / f"{name}-{base_i}.png").convert("RGBA"))
-    h, w = base.shape[:2]
-    rows, cols = np.arange(h)[:, None], np.arange(w)[None, :]
-    head = ((cols >= head_x) & (rows <= neck_y)) | ((cols >= chin_x) & (rows <= chin_y))
-    dark_rgb = {tuple(int(c) for c in palette[i]) for i in dark}
-
-    def moved(a: np.ndarray, dx: int, dy: int) -> np.ndarray:
-        out = np.zeros_like(a)
-        out[max(dy, 0) : h + min(dy, 0), max(dx, 0) : w + min(dx, 0)] = a[
-            max(-dy, 0) : h + min(-dy, 0), max(-dx, 0) : w + min(-dx, 0)
-        ]
-        return out
-
-    for n in members:
-        a = np.asarray(Image.open(OUT / f"{name}-{n}.png").convert("RGBA"))
-        dx, dy = min(
-            ((dx, dy) for dy in range(-3, 4) for dx in range(-20, 21)),  # wide: the toes can miss
-            key=lambda s: int((((moved(a, *s)[..., 3] > 0) != (base[..., 3] > 0)) & ~head).sum()),
-        )
-        a = moved(a, dx, dy)
-        out = base.copy()
-        out[head] = a[head]
-        # fur left next to the background where the head meets the base's neck: close the outline
-        solid = out[..., 3] > 0
-        p = np.pad(solid, 1)
-        exposed = solid & ~(p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:])
-        for y, x in zip(*np.where(exposed)):
-            if tuple(int(c) for c in out[y, x, :3]) not in dark_rgb:
-                out[y, x, :3] = palette[outline]
-        Image.fromarray(out, "RGBA").save(OUT / f"{name}-{n}.png")
-        print(name, n, "head on the body of", base_i, "shifted", dx, dy)
-
-
 # Standing up from sitting: she stands on all fours before she runs on (Vatra, 7.10.2026), with
 # the standing frame of pooping in one spot. The sit frames lie further right than the others
 # (aligned on the front toes), so it is moved right until its head is where her head was in
@@ -828,13 +798,15 @@ def main() -> None:
             out[solid, 3] = 255
             parts.append((box, px, ear, Image.fromarray(out, "RGBA")))
 
+        # alignment: ear at ANCHOR_X, height from the source image's ground
+        figures = [[box, px, img, TOES_X.get(name, NOSE_X.get(name, ANCHOR_X)) - ear,
+                    CANVAS_H - int(round((ground - box[0].start) / FACTOR[name]))]
+                   for box, px, ear, img in parts if px.shape[1] >= 20]  # not the pile
+        for n, base in SETTLE.get(name, {}).items():
+            b = figures[base]
+            figures[n][3] = settle_x(figures[n][1], figures[n][4], b[1], b[3], b[4], transparent)
         dogs = []
-        for box, px, ear, img in parts:
-            if px.shape[1] < 20:  # the pile, not the dog
-                continue
-            # alignment: ear at ANCHOR_X, height from the source image's ground
-            x = TOES_X.get(name, NOSE_X.get(name, ANCHOR_X)) - ear
-            y = CANVAS_H - int(round((ground - box[0].start) / FACTOR[name]))
+        for box, px, img, x, y in figures:
             canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H))
             canvas.paste(img, (x, y), img)
             fixed = FIX / f"{name}-{len(dogs)}.png"
@@ -898,8 +870,6 @@ def main() -> None:
     blink(palette, dark, outline)
     sniff_bob(palette, dark, outline)
     sit_up()
-    for name, *spec in ONE_BODY:
-        one_body(name, *spec, palette, dark, outline)
 
 
 if __name__ == "__main__":

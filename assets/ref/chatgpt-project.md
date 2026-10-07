@@ -242,6 +242,8 @@ Rules for this sheet:
 
 ### Scratching behind the ear (save as `assets/src/scratch.png`)
 
+Not sent: Vatra dropped scratching (7.10.2026, too hard, for ChatGPT too). The message stays as a record.
+
 Attach `ferro-ref.png` and `assets/src/sit.png`. She brakes and sits down with sit-0 and sit-1, as when she sits; the scratching loops frames 2, 3, 4, 3 fast, then frame 5, and she gets up as from sitting.
 
 ```text
