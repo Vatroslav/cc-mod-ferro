@@ -12,6 +12,11 @@ verified:
       Claude Code 2.1.288 in Desktop: a second probe mod (hot reload) drew Ferro's summer sitting
       scene from PNG frames without isInteractive above the same scene in vector strokes with it;
       Vatra compared the two in the band
+  - by: human:vatra
+    at: 2026-10-07T16:10:00+02:00
+    how: >-
+      In Desktop: Ferro, already asleep in a conversation, lay down again from the standing frame
+      every time he opened that conversation
 stale_after: 2026-12-06T00:00:00+01:00
 ---
 
@@ -42,7 +47,8 @@ every few days, so check again when the mod misbehaves after an update.
 - In the first probe (a small test drawing), the image-mode `Svg` came out wider than the `width`
   it was given. With Ferro's scene and the same `width` and `height` as the mod passes, it did not.
 - Scrolling the band restarted the animation in both modes (second probe): the image mode is no
-  worse than the sandboxed frame here.
+  worse than the sandboxed frame here. Opening a conversation again restarts it too (Vatra,
+  7.10.2026), so the mod swaps in a sleeping scene without lying down once she has lain down.
 
 ## The band above the prompt
 

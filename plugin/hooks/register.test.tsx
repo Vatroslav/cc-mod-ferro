@@ -58,6 +58,25 @@ test('after 20 s Ferro runs, after 3 min she sleeps, on the same background', as
   expect((await band($)).svg?.props.alt).toBe(`Ferro asleep on ${place[1]}`)
 })
 
+test('once she has lain down she sleeps on without lying down again', async ($: any, on) => {
+  const { SCENES, SLEEP_INTRO_MS } = await import('./scene')
+  const { clock } = setup(on)
+  await $.turn.start({ text: 'x', turnId: 't1' })
+  await clock.advance(180_000)
+  const lying = (await band($)).svg?.props
+  const s = SCENES.find(s => s.sleep === lying.source)
+  expect(s).toBeDefined()
+  await clock.advance(SLEEP_INTRO_MS - 1)
+  expect((await band($)).svg?.props.source).toBe(s.sleep)
+  await clock.advance(1)
+  const asleep = (await band($)).svg?.props
+  expect(asleep.source).toBe(s.asleep)
+  expect(asleep.alt).toBe(lying.alt)
+  // the scene without lying down has no intro frames
+  expect(s.sleep).toContain('href="#s0"')
+  expect(s.asleep).not.toContain('href="#s')
+})
+
 test('a band drawn beneath Ferro goes first, and she runs again when it is gone', async ($: any, on) => {
   const { clock, below } = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
