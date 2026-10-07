@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "assets" / "src"
 OUT = ROOT / "assets" / "px"
 PALETTE_FILE = ROOT / "assets" / "palette.json"
+# Frames fixed by hand in a pixel editor (same 76x44 canvas, same position): a file here replaces
+# the built frame of the same name, before the breathing, blink and sniff frames are derived.
+FIX = ROOT / "assets" / "fix"
 
 # How many source pixels make one real pixel. The dog is drawn at a different size in each
 # image, so the factor evens out the dog's height from ear tip to ground (run ~240, poop and
@@ -499,9 +502,14 @@ def main() -> None:
             y = CANVAS_H - int(round((ground - box[0].start) / FACTOR[name]))
             canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H))
             canvas.paste(img, (x, y), img)
+            fixed = FIX / f"{name}-{len(dogs)}.png"
+            if fixed.exists():
+                canvas = Image.open(fixed).convert("RGBA")
+                assert canvas.size == (CANVAS_W, CANVAS_H), f"{fixed.name} is {canvas.size}, not {CANVAS_W}x{CANVAS_H}"
             canvas.save(OUT / f"{name}-{len(dogs)}.png")
             dogs.append((box, x))
-            print(name, len(dogs) - 1, "size", px.shape[1], "x", px.shape[0], "at", x, y)
+            print(name, len(dogs) - 1, "size", px.shape[1], "x", px.shape[0], "at", x, y,
+                  "(fixed by hand)" if fixed.exists() else "")
 
         if name in DROPPINGS:
             drops = [img for _, px, _, img in parts if px.shape[1] < 20]
