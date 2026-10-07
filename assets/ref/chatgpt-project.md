@@ -171,3 +171,22 @@ Rules for this sheet:
 - No dog, no grass, no ground, no shadow, no text.
 - New colours only for the bowls and the water. Never magenta or purple.
 ```
+
+## Message for lapping water from the bowl (7.10.2026)
+
+Attach `ferro-ref.png`, `assets/src/drink.png` and `assets/src/bowl.png`; save the result as `assets/src/drink-lap.png`. Ferro and the bowl were drawn apart and put together in code, and Vatra did not like it (her muzzle under the water looked like drowning; with the bowl behind her the water hardly showed). Here ChatGPT draws them together, so the tongue meets the water as it should.
+
+```text
+Sprite sheet: Ferro lapping water from the red bowl in the attached bowl.png, in the pose of frame 2 of the attached drink.png. 4 frames, left to right:
+1. Head lowered over the bowl, muzzle just above the water, tongue out and down, its tip touching the water surface.
+2. Tongue curled under, scooping water, two or three small drops splashing out of the bowl beside it.
+3. Tongue pulled back up towards the mouth, the drops falling beside the bowl.
+4. Mouth closed just above the water, one drop landing on the ground beside the bowl.
+
+Rules for this sheet:
+- The muzzle never goes under the water: only the tongue touches it.
+- The bowl is identical in every frame and in the same position. Ferro's body, legs and tail are identical in every frame; only the head and the tongue move.
+- Same scale as the reference: standing, she is about 40 pixels from ear tips to paws. The bowl is a little wider than her head is long. Do not draw them bigger.
+- The tongue in the salmon pink of the reference, with its shading. The drops light blue with a white highlight pixel.
+- All 4 frames stand on the same ground line. No grass, no ground, no shadow.
+```
