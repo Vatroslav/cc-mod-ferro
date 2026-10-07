@@ -6,7 +6,7 @@ A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a tur
 
 ## What Ferro does
 
-Every turn picks a meadow, a program for the run and whether she chases a ball, all at random. A program is a run with a stop every 12 to 22 seconds, the first one 16 seconds in: she sits, sniffs, drinks or poops, never the same thing twice in a row and poops at most once. The scenes below have one stop each, 16 seconds in.
+Every turn picks a meadow, a program for the run and whether she chases a ball, all at random. A program is a run with a stop every 6 to 12 seconds, the first one 5 seconds in: she sits, sniffs, drinks or poops, never the same thing twice in a row and poops at most once. The scenes below have one stop each, 5 seconds in.
 
 **Sits down and looks at you** (the first stop in two fifths of the programs; a short turn sees only that one). She brakes, sits, turns her head to you, blinks, tilts her head, turns back, gets up on all fours and sets off from where she stood.
 
