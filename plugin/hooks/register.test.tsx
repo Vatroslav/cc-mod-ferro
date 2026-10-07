@@ -34,6 +34,12 @@ async function band($: any, surface: 'desktop' | 'terminal' = 'desktop', p = pro
   return { svg, drawn, isEngine: drawn.type === 'engine' }
 }
 
+// a run without the props the turn picked: their drawings right after the head, their <use>s
+const withoutProps = (body: string) =>
+  body
+    .replace(/^<defs>(<image id="prop-[^"]+"[^>]*\/>)+<\/defs>/, '')
+    .replace(/<use href="#prop-[^"]+" x="-?\d+" y="-?\d+"\/>/g, '')
+
 const complete = (turnId: string, agentId?: string) => ({
   answer: '', durationMs: 0, isAborted: false, turnId, reason: 'answer', ...(agentId ? { agentId } : {}),
 })
@@ -154,7 +160,7 @@ test('every turn picks a program of its background', async ($: any, on) => {
     const source: string = (await band($)).svg?.props.source
     const k = SCENES.findIndex(s => source.startsWith(s.head))
     expect(k).toBeGreaterThanOrEqual(0)
-    const body = source.slice(SCENES[k].head.length)
+    const body = withoutProps(source.slice(SCENES[k].head.length))
     const j = SCENES[k].programs.findIndex(
       p => body === p.body || body === p.body.slice(0, p.ballAt) + p.ball + p.body.slice(p.ballAt),
     )
@@ -164,4 +170,57 @@ test('every turn picks a program of its background', async ($: any, on) => {
   }
   // 40 turns over 2 backgrounds x 10 programs (with or without the ball) do not all play the same run
   expect(seen.size).toBeGreaterThan(1)
+})
+
+test('a slot gets a prop by the chances, the rest of 100 is an empty slot', async () => {
+  const { PROPS } = await import('./scene')
+  const { pickProp } = await import('./run')
+  for (const where of ['ground', 'far'] as const) {
+    const mine = PROPS.map((p, i) => ({ ...p, i })).filter(p => p.where === where)
+    const total = mine.reduce((s, p) => s + p.chance, 0)
+    expect(total).toBeLessThanOrEqual(100)
+    if (mine.length === 0) {
+      expect(pickProp(where, 0)).toBe(-1)
+      continue
+    }
+    expect(pickProp(where, 0)).toBe(mine[0].i)
+    // just under the share of the first prop is still the first, just over it is the next
+    expect(pickProp(where, (mine[0].chance - 0.001) / 100)).toBe(mine[0].i)
+    expect(pickProp(where, 0.99999)).toBe(total < 99.999 ? -1 : mine[mine.length - 1].i)
+  }
+})
+
+test('the props stand in the slots of the program, with the drawings of the picked ones only', async () => {
+  const { PROPS, SCENES } = await import('./scene')
+  const { runScene } = await import('./run')
+  const s = SCENES[0]
+  const p = s.programs[0]
+  const g = PROPS.findIndex(q => q.where === 'ground')
+  const picks = { ground: p.slots.map((_, k) => (k === 0 ? g : -1)), far: p.far.map(() => -1) }
+  const run = runScene(s, p, false, picks)
+  const name = PROPS[g].name
+  expect(run.match(new RegExp(`<use href="#prop-${name}"`, 'g'))?.length).toBe(1)
+  expect(run).toContain(`<image id="prop-${name}"`)
+  expect(run.match(/<image id="prop-/g)?.length).toBe(1)
+  const [x, bottom] = p.slots[0]
+  expect(run).toContain(`<use href="#prop-${name}" x="${x}" y="${bottom - PROPS[g].h + 1}"/>`)
+  expect(withoutProps(run.slice(s.head.length))).toBe(p.body)
+})
+
+test('every slot taken, with the ball, a run still fits the Svg element limit', async () => {
+  const { PROPS, SCENES } = await import('./scene')
+  const { runScene } = await import('./run')
+  const ground = PROPS.map((q, i) => i).filter(i => PROPS[i].where === 'ground')
+  const far = PROPS.map((q, i) => i).filter(i => PROPS[i].where === 'far')
+  for (const s of SCENES) {
+    for (const p of s.programs) {
+      const picks = {
+        ground: p.slots.map((_, k) => (ground.length ? ground[k % ground.length] : -1)),
+        far: p.far.map((_, k) => (far.length ? far[k % far.length] : -1)),
+      }
+      const run = runScene(s, p, true, picks)
+      expect(run.length).toBeLessThanOrEqual(131072)
+      expect(run.startsWith('<svg') && run.endsWith('</svg>')).toBe(true)
+    }
+  }
 })

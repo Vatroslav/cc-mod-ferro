@@ -4,7 +4,14 @@ export type FerroPhase = 'run' | 'sleep' | 'asleep' | null
 
 declare module 'claude-code' {
   interface PluginState {
-    // program: which run this turn plays, an index into the background's programs
-    'cc-mod-ferro': { phase: FerroPhase; scene: number; program: number; ball: boolean }
+    // program: which run this turn plays, an index into the background's programs; props: what
+    // stands in its prop slots (indices into PROPS, -1 for none)
+    'cc-mod-ferro': {
+      phase: FerroPhase
+      scene: number
+      program: number
+      ball: boolean
+      props: { ground: number[]; far: number[] }
+    }
   }
 }

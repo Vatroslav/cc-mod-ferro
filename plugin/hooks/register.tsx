@@ -2,6 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
 
 import type { FerroPhase } from '../types'
+import { pickProps, runScene } from './run'
+import type { PropPicks } from './run'
 import { SCENE_MAX_WIDTH, SCENES, SLEEP_INTRO_MS } from './scene'
 
 // Ferro comes out only when a turn lasts longer than this, so short answers do not flash the band.
@@ -20,6 +22,8 @@ const scene = atom({ plugin: 'cc-mod-ferro', key: 'scene' } as const, 0)
 const program = atom({ plugin: 'cc-mod-ferro', key: 'program' } as const, 0)
 // Whether she chases the ball this turn, also picked per turn.
 const ball = atom({ plugin: 'cc-mod-ferro', key: 'ball' } as const, false)
+// What stands in the program's prop slots this turn (run.ts), picked per turn by the props' chances.
+const props = atom({ plugin: 'cc-mod-ferro', key: 'props' } as const, { ground: [], far: [] } as PropPicks)
 
 export const register: Register = on => {
   let timers: Timer[] = []
@@ -33,7 +37,9 @@ export const register: Register = on => {
     await update($, phase, () => null)
     const background = Math.floor(Math.random() * SCENES.length)
     await update($, scene, () => background)
-    await update($, program, () => Math.floor(Math.random() * SCENES[background].programs.length))
+    const run = Math.floor(Math.random() * SCENES[background].programs.length)
+    await update($, program, () => run)
+    await update($, props, () => pickProps(SCENES[background].programs[run]))
     await update($, ball, () => Math.random() < BALL_SHARE)
     timers = [
       $.clock.after(RUN_AFTER_MS, () => void update($, phase, () => 'run')),
@@ -76,9 +82,9 @@ export const register: Register = on => {
     const s = SCENES[await read($, scene)] ?? SCENES[0]
     const p = s.programs[await read($, program)] ?? s.programs[0]
     const withBall = await read($, ball)
-    // every program of a background shares the head (the meadow and all drawings); the ball is a
-    // piece of SVG inserted into the program's body
-    const run = s.head + (withBall ? p.body.slice(0, p.ballAt) + p.ball + p.body.slice(p.ballAt) : p.body)
+    // every program of a background shares the head (the meadow and all drawings); the ball and the
+    // props are pieces of SVG inserted into the program's body
+    const run = runScene(s, p, withBall, await read($, props))
     const runAlt = withBall ? `Ferro chasing an orange ball across ${s.place}` : `Ferro running across ${s.place}`
 
     // Without an explicit width the frame stays at 300 px. Desktop counts the band in columns
