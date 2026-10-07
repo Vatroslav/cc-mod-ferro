@@ -439,9 +439,9 @@ def ball(outline_rgb: np.ndarray) -> None:
 # three bowls in a row (red, steel, blue) and five drops below them. The code-drawn bowl was
 # rejected (Vatra, 7.10.2026). They are props with colours of their own, so each figure gets its
 # own small palette (median cut over its pixels, like the clouds) instead of the dog's, and one
-# factor for all: the bowls come out about 20 pixels wide, wide enough for her muzzle, and the
-# drops keep their size relative to the bowls. Saved as bowl-<i>.png and water-drop-<i>.png.
-PROP_FACTOR = {"bowl": 20.0}
+# factor for all: the bowls come out 17x8, low enough that the water lies under her jaw where her
+# tongue reaches it in drink-1, and the drops keep their size relative to the bowls. Saved as bowl-<i>.png and water-drop-<i>.png.
+PROP_FACTOR = {"bowl": 24.0}
 PROP_COLORS = (10, 5)  # colours of a bowl, of a drop
 PROP_BIG = 200  # source pixels: a wider figure is a bowl, a narrower one a drop
 
