@@ -28,7 +28,9 @@ FIX = ROOT / "assets" / "fix"
 # the head the size of the other frames. In sniff.png her head is down, so its factor evens out
 # the length instead: the walking frames come out 51-55 pixels long, like standing (poop-0, 51)
 # and running (56).
-FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8, "sit": 9.0, "sniff": 6.0}
+# drink.png is drawn a little bigger again (standing 343-359 source pixels long): 6.5 makes her
+# 53-55 pixels long, like standing. Not yet checked by eye.
+FACTOR = {"run": 6.0, "poop": 5.5, "sleep": 5.55, "poop-walk": 6.8, "sit": 9.0, "sniff": 6.0, "drink": 6.5}
 # Sheets whose small figures are a row of droppings: each one is saved on its own as
 # <name>-drop-<i>.png. In poop.png the small figure is the pile next to the frame making it.
 # ChatGPT drew them bigger than asked (the largest as wide as a third of the dog), so they get
@@ -59,6 +61,35 @@ def tongue_mask(rgb: np.ndarray) -> np.ndarray:
     return (r > 200) & (g < 150) & (b > 80) & (b < 170) & (r - b > 60)
 
 
+# The tongue has three shades of the same pink (palette.json "tongue", dark to light), so it keeps
+# the texture ChatGPT draws (Vatra, 7.10.2026). With one colour, only its brighter pixels passed
+# tongue_mask and the darker ones went to brown fur. A tongue is a patch of pink of at least
+# TONGUE_MIN_AREA source pixels: blue about as strong as green, where tan fur and orange ears have
+# far less blue than green. Each of its pixels gets the shade nearest to its brightness relative
+# to the patch's average, so every tongue averages to the middle shade whatever pink ChatGPT used.
+TONGUE_MIN_AREA = 60
+TONGUE_SHADES = (0.78, 1.2)  # dark and light, times the middle shade; only for --new-palette
+LUMA = np.array([0.299, 0.587, 0.114])
+
+
+def tongue_shades(rgb: np.ndarray, bg: np.ndarray, tongue: np.ndarray) -> np.ndarray:
+    """Index into the tongue shades for each source pixel of a tongue, -1 elsewhere. Pink pixels
+    of tongue_mask outside a big enough patch (a stray speck on an ear) get the middle shade."""
+    r, g, b = [rgb[..., i].astype(int) for i in range(3)]
+    pink = (r > 140) & (r - g > 45) & (b > g - 30) & ~bg
+    lab, k = ndimage.label(pink)
+    out = np.full(bg.shape, -1, dtype=np.int16)
+    out[tongue_mask(rgb) & ~bg] = len(tongue) // 2
+    sizes = ndimage.sum(pink, lab, range(1, k + 1))
+    ratios = (tongue @ LUMA) / (tongue[len(tongue) // 2] @ LUMA)
+    luma = rgb @ LUMA
+    for i in [i + 1 for i, s in enumerate(sizes) if s >= TONGUE_MIN_AREA]:
+        m = lab == i
+        rel = luma[m] / luma[m].mean()
+        out[m] = np.abs(rel[:, None] - ratios[None]).argmin(1)
+    return out
+
+
 def white_mask(rgb: np.ndarray) -> np.ndarray:
     """Eye highlight: ChatGPT draws it as a dot smaller than one real pixel."""
     return rgb.min(2) > 235
@@ -85,7 +116,8 @@ CANVAS_W, CANVAS_H = 76, 44
 ANCHOR_X = 54
 # Sheets where the head turns, so the ear moves: their frames are aligned on the front toes
 # (the rightmost pixel of the bottom rows) instead, which stay planted.
-TOES_X = {"sit": 54}
+# drink: she stands in the same spot from frame 2 on while only her head moves.
+TOES_X = {"sit": 54, "drink": 54}
 # Sheets where the head is down, so the top quarter of the figure is the tail and the back, not
 # the ear: their frames are aligned on the nose (the rightmost pixel), at the x of the nose of a
 # running frame, so she keeps her place when she drops her nose out of a run.
@@ -100,8 +132,11 @@ def ear_right(px: np.ndarray, transparent: int) -> int:
     return int(np.where(top.any(0))[0].max())
 
 
-def downsample(idx: np.ndarray, factor: float, transparent: int) -> np.ndarray:
-    """Each real pixel gets the most common colour of its block; transparent if background wins."""
+def downsample(idx: np.ndarray, factor: float, transparent: int, group: tuple = ()) -> np.ndarray:
+    """Each real pixel gets the most common colour of its block; transparent if background wins.
+    The colours of a group (the tongue shades) vote together, and a block they win gets the
+    group's most common colour: split into shades, the tongue would lose blocks to the fur."""
+    group = list(group)
     h, w = idx.shape
     th, tw = int(round(h / factor)), int(round(w / factor))
     out = np.full((th, tw), transparent, dtype=np.int16)
@@ -114,6 +149,10 @@ def downsample(idx: np.ndarray, factor: float, transparent: int) -> np.ndarray:
             if counts[transparent] * 2 >= block.size:
                 continue
             counts[transparent] = 0
+            if group:
+                total, best = counts[group].sum(), group[int(counts[group].argmax())]
+                counts[group] = 0
+                counts[best] = total
             out[y, x] = counts.argmax()
     return out
 
@@ -310,23 +349,26 @@ def new_palette(sheets: dict, bgs: dict) -> np.ndarray:
         PALETTE_SIZE, method=Image.Quantize.MEDIANCUT, kmeans=20
     )
     palette = np.array(pal_img.getpalette()[: PALETTE_SIZE * 3]).reshape(-1, 3)
+    tongue = pixels(tongue_mask).mean(0)
+    shades = [np.clip(tongue * k, 0, 255) for k in TONGUE_SHADES]
     return np.vstack(
-        [palette, pixels(tongue_mask).mean(0).round(), pixels(white_mask).mean(0).round()]
-    ).astype(int)
+        [palette, shades[0], tongue, shades[1], pixels(white_mask).mean(0)]
+    ).round().astype(int)
 
 
 def save_palette(palette: np.ndarray) -> None:
     hexes = ["#%02x%02x%02x" % tuple(int(c) for c in p) for p in palette]
-    data = {"fur": hexes[:-2], "tongue": hexes[-2], "highlight": hexes[-1]}
+    data = {"fur": hexes[:-4], "tongue": hexes[-4:-1], "highlight": hexes[-1]}
     PALETTE_FILE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print("new palette saved to", PALETTE_FILE.relative_to(ROOT))
 
 
-def load_palette() -> np.ndarray:
-    """Fur and outline colours, then the tongue, then the eye highlight (the order sets the indices)."""
+def load_palette() -> tuple[np.ndarray, int]:
+    """Fur and outline colours, then the tongue shades, then the eye highlight (the order sets the
+    indices), and the number of tongue shades."""
     data = json.loads(PALETTE_FILE.read_text(encoding="utf-8"))
-    hexes = data["fur"] + [data["tongue"], data["highlight"]]
-    return np.array([[int(h[i : i + 2], 16) for i in (1, 3, 5)] for h in hexes])
+    hexes = data["fur"] + data["tongue"] + [data["highlight"]]
+    return np.array([[int(h[i : i + 2], 16) for i in (1, 3, 5)] for h in hexes]), len(data["tongue"])
 
 
 # Breathing: from the last sleep frame comes a frame with the whole back raised by one pixel.
@@ -447,9 +489,10 @@ def main() -> None:
 
     if "--new-palette" in sys.argv or not PALETTE_FILE.exists():
         save_palette(new_palette(sheets, bgs))
-    palette = load_palette()
-    fur_n = len(palette) - 2
-    tongue_i, white_i, transparent = fur_n, fur_n + 1, fur_n + 2
+    palette, tongue_n = load_palette()
+    fur_n = len(palette) - tongue_n - 1
+    tongue_ids = tuple(range(fur_n, fur_n + tongue_n))
+    white_i, transparent = fur_n + tongue_n, fur_n + tongue_n + 1
     dark = {i for i, p in enumerate(palette) if p.sum() < 200}  # outline, nose, eyes
     outline = int(palette[:fur_n].sum(1).argmin())
 
@@ -464,7 +507,8 @@ def main() -> None:
             better = d < best_d
             best[better], best_d[better] = i, d[better]
         idx = best.reshape(bg.shape)
-        idx[tongue_mask(rgb)] = tongue_i
+        shade = tongue_shades(rgb, bg, palette[fur_n : fur_n + tongue_n].astype(float))
+        idx[shade >= 0] = fur_n + shade[shade >= 0]
         white = white_mask(rgb)
         idx[white] = white_i
         idx[bg] = transparent
@@ -478,14 +522,14 @@ def main() -> None:
             crop[~own] = transparent
             is_dog = box[1].stop - box[1].start >= 20 * FACTOR[name]
             factor = FACTOR[name] if is_dog or name not in DROPPINGS else DROPPINGS[name]
-            px = downsample(crop, factor, transparent)
+            px = downsample(crop, factor, transparent, tongue_ids)
             # the ear used for alignment is measured before cleaning, so frames stay where they were
             ear = ear_right(px, transparent) if px.shape[1] >= 20 else 0
             if name in TOES_X and px.shape[1] >= 20:
                 ear = int(np.where((px[-2:] != transparent).any(0))[0].max())  # front toes
             if name in NOSE_X and px.shape[1] >= 20:
                 ear = int(np.where((px != transparent).any(0))[0].max())  # nose
-            clean_edges(px, transparent, dark, {tongue_i, white_i}, outline)
+            clean_edges(px, transparent, dark, {*tongue_ids, white_i}, outline)
             catchlights(px, white[box] & own, factor, white_i, dark, transparent)
             solid = px != transparent
             out = np.zeros((*px.shape, 4), dtype=np.uint8)

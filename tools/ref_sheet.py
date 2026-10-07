@@ -50,9 +50,9 @@ def main() -> None:
         sheet.alpha_composite(h, (x, MARGIN + top_h - h.height))
         x += h.width + MARGIN
 
-    # top right: the palette (fur and outline, then tongue and highlight)
+    # top right: the palette (fur and outline, then the tongue shades and the highlight)
     pal = json.loads((ROOT / "assets" / "palette.json").read_text(encoding="utf-8"))
-    colors = pal["fur"] + [pal["tongue"], pal["highlight"]]
+    colors = pal["fur"] + pal["tongue"] + [pal["highlight"]]
     sx = W - MARGIN - SWATCH_COLS * (SWATCH + SWATCH_GAP) + SWATCH_GAP
     for i, c in enumerate(colors):
         col, row = i % SWATCH_COLS, i // SWATCH_COLS
