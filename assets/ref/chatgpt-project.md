@@ -460,3 +460,5 @@ Rules for this sheet:
 - Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
 - No text, no labels.
 ```
+
+Fourth try (8.10.2026, only the template attached): rejected. Minas Tirith now has the tiers, the spur, the mountain and the tower, but the pixels were 7.4 source pixels for the grid's 13.9 (238 across instead of 128) and every building came out bigger than its box: Orthanc 22 x 36 grid pixels for 18 x 32, Barad-dur 33 x 37 for 26 x 32, Minas Tirith 45 x 32 for 36 x 28. At its own pixels Orthanc would be about 67 pixels tall in the band, over the 53 a far prop may have, so it fails on any grid. Over four tries ChatGPT's pixel was 10.1, 5.6, 5.9 and 7.4 source pixels for the 13.9 asked: it does not hold a grid, with the measures in numbers or as a template. Not saved in the repo.
