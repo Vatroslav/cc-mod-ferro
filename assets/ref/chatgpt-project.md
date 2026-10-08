@@ -437,3 +437,5 @@ Rules for this sheet:
 - Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
 - No text, no labels.
 ```
+
+Third try (8.10.2026, only the template attached): rejected. The sizes came close (Orthanc 19 x 34 grid pixels for 18 x 32, Minas Tirith 39 x 31 for 36 x 28, Barad-dur 29 x 37 for 26 x 32, the only one off), but ChatGPT drew with pixels of 5.9 source pixels for the grid's 13.9 (299 across instead of 128): about twice the detail asked. Vatra did not like its Minas Tirith. Not saved in the repo.
