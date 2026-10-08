@@ -19,3 +19,10 @@ preview/props-src/
 preview/props-every.svg
 preview/variants/
 preview/far-variants.html
+
+# tokens (tools/pixellab.py reads its own; never committed)
+secrets/
+
+# PixelLab candidates, only for viewing (tools/pixellab.py writes them)
+preview/pixellab/
+preview/pixellab.html

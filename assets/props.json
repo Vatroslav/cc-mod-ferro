@@ -3,7 +3,9 @@
     "props-ground": {"approved_by_eye": "7.10.2026"},
     "props-ships": {"approved_by_eye": "7.10.2026"},
     "props-far": {"approved_by_eye": "7.10.2026"},
-    "props-far-fantasy": {"grid": [128, 64]}
+    "prop-orthanc": {"native": true},
+    "prop-barad-dur": {"native": true},
+    "prop-minas-tirith": {"native": true}
   },
   "props": [
     {"name": "rock", "sheet": "props-ground", "where": "ground", "chance": 28},
@@ -20,8 +22,8 @@
     {"name": "ship-6", "sheet": "props-ships", "where": "edge", "chance": 0.5},
     {"name": "tower", "sheet": "props-far", "where": "far", "chance": 30},
     {"name": "town", "sheet": "props-far", "where": "far", "chance": 30},
-    {"name": "orthanc", "sheet": "props-far-fantasy", "where": "far", "chance": 1, "size": [18, 32]},
-    {"name": "barad-dur", "sheet": "props-far-fantasy", "where": "far", "chance": 1, "size": [26, 32]},
-    {"name": "minas-tirith", "sheet": "props-far-fantasy", "where": "far", "chance": 1, "size": [36, 28]}
+    {"name": "orthanc", "sheet": "prop-orthanc", "where": "far", "chance": 1, "reference": {"image": "props-far-fantasy-chatgpt-4.png", "figure": 0}, "size": [18, 32], "prompt": "Orthanc, the black tower of Isengard from The Lord of the Rings: a tall smooth black stone spire with four sharp horns at its top, on a small green hill, far in the distance, pale hazy bluish colours, side view"},
+    {"name": "barad-dur", "sheet": "prop-barad-dur", "where": "far", "chance": 1, "reference": {"image": "props-far-fantasy-chatgpt-4.png", "figure": 1}, "size": [26, 32], "prompt": "Barad-dur, Sauron's dark tower from The Lord of the Rings: a jagged black tower with spikes on a dark mountain with thin red lava streams, the glowing orange Eye of Sauron between two horns at its top, far in the distance, pale hazy bluish colours, side view"},
+    {"name": "minas-tirith", "sheet": "prop-minas-tirith", "where": "far", "chance": 1, "reference": {"image": "props-far-fantasy-chatgpt-4.png", "figure": 2}, "size": [36, 28], "prompt": "Minas Tirith from The Lord of the Rings: a white city of seven curved tiers built against a grey mountain, a huge rock spur like the prow of a ship cutting through the tiers, one tall slender white tower on top, far in the distance, pale hazy bluish colours, side view"}
   ]
 }

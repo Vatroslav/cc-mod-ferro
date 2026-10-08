@@ -14,6 +14,11 @@ the rule carry `approved_by_eye` (Vatra saw them in the band) and are not checke
 `python tools/props.py --template <sheet>` draws the grid and the box of each object as an image to
 attach to the message (assets/ref/template-<sheet>.png).
 
+ChatGPT never held the grid (four tries for Orthanc, 8.10.2026), so a prop can also come from PixelLab
+(tools/pixellab.py), which draws in real pixels at the size asked: a `native` sheet is one prop's own
+image (assets/src/prop-<name>.png), nothing to cut. It passes the same gate (`native_check`): only
+fully opaque or fully clear pixels, its size, its place.
+
 The registry is assets/props.json, one entry per prop: its sheet, where it stands ("ground": on the
 meadow, behind or in front of her; "far": behind the hills; "edge": at the far edge of the meadow, in
 front of the forest) and its chance in percent per slot (see
@@ -77,6 +82,27 @@ def check(spec: dict, shape: tuple[int, ...], size: float, mine: list[dict], fou
         if any(abs(got - want) > max(SIZE_SLACK, SIZE_TOLERANCE * want) for got, want in ((w, aw), (h, ah))):
             problems.append(f"{p['name']} is {w:.0f} x {h:.0f} grid pixels, asked {aw} x {ah}")
     return problems
+
+
+def native_check(img: np.ndarray, p: dict) -> tuple[list[str], np.ndarray | None]:
+    """A prop drawn in real pixels (RGBA): what is off its measures, and the prop trimmed to its
+    pixels. Nothing is changed: a half-clear pixel is a problem, not something to round."""
+    a = img[..., 3]
+    if not a.any():
+        return ["empty"], None
+    problems = []
+    half = int(((a > 0) & (a < 255)).sum())
+    if half:
+        problems.append(f"{half} half-clear pixels")
+    ys, xs = np.where(a > 0)
+    out = img[ys.min() : ys.max() + 1, xs.min() : xs.max() + 1]
+    h, w = out.shape[:2]
+    aw, ah = p["size"]
+    if any(abs(got - want) > max(SIZE_SLACK, SIZE_TOLERANCE * want) for got, want in ((w, aw), (h, ah))):
+        problems.append(f"{w} x {h} pixels, asked {aw} x {ah}")
+    if h > MAX_H[p["where"]]:
+        problems.append(f"{h} pixels tall, at most {MAX_H[p['where']]}")
+    return problems, out
 
 
 def figures(rgb: np.ndarray, bg: np.ndarray) -> list[tuple[tuple[slice, slice], np.ndarray]]:
@@ -205,13 +231,26 @@ def main() -> None:
     for sheet in dict.fromkeys(p["sheet"] for p in props):
         mine = [p for p in props if p["sheet"] == sheet]
         spec = specs.get(sheet, {})
-        assert "grid" in spec or "approved_by_eye" in spec, f"{sheet}: give it the grid asked in the sheets of props.json"
-        assert "grid" not in spec or all("size" in p for p in mine), f"{sheet}: give each prop the size asked"
+        assert {"grid", "native", "approved_by_eye"} & spec.keys(), f"{sheet}: give it its measures in the sheets of props.json"
+        assert "approved_by_eye" in spec or all("size" in p for p in mine), f"{sheet}: give each prop the size asked"
+        assert not spec.get("native") or len(mine) == 1, f"{sheet}: a native sheet is one prop"
         if not (SRC / f"{sheet}.png").exists():
-            # a sheet ChatGPT has not drawn yet: its props stay out of the mod
+            # a sheet not drawn yet: its props stay out of the mod
             for p in mine:
                 (OUT / f"prop-{p['name']}.png").unlink(missing_ok=True)
             print(f"{sheet}: not drawn yet, so {', '.join(p['name'] for p in mine)} wait")
+            continue
+        if spec.get("native"):
+            p = mine[0]
+            problems, out = native_check(np.asarray(Image.open(SRC / f"{sheet}.png").convert("RGBA")), p)
+            if problems:
+                rejected[sheet] = problems
+                (OUT / f"prop-{p['name']}.png").unlink(missing_ok=True)
+                print(f"{sheet}: REJECTED, so {p['name']} stays out of the mod:\n  " + "\n  ".join(problems))
+                continue
+            Image.fromarray(out, "RGBA").save(OUT / f"prop-{p['name']}.png")
+            Image.fromarray(out, "RGBA").save(PREVIEW_SRC / f"{p['name']}.png")
+            print(f"{p['name']}: {out.shape[1]} x {out.shape[0]} ({p['where']}, {p['chance']}%, real pixels)")
             continue
         rgb = np.asarray(Image.open(SRC / f"{sheet}.png").convert("RGB"))
         bg = background_mask(rgb)
