@@ -265,7 +265,7 @@ Rules for this sheet:
 
 ## Messages for the props she runs past (7.10.2026)
 
-Props stand on the meadow or in the distance and scroll past while Ferro runs; she does not touch them (Vatra, 7.10.2026). They are a library: one line per prop in a registry, so a new one is one drawing and one line (see "Props she runs past" in CLAUDE.md). `build.py` cuts each figure and scales it to the height the registry gives it, so ChatGPT drawing them too big does not matter as long as the detail is chunky enough for that height. The figures are cut left to right, so the order in the message is the order of the names.
+Props stand on the meadow or in the distance and scroll past while Ferro runs; she does not touch them (Vatra, 7.10.2026). They are a library: one line per prop in a registry, so a new one is one drawing and one line (see "Props she runs past" in CLAUDE.md). `tools/props.py` cuts each figure on ChatGPT's own grid, one pixel per ChatGPT pixel, never scaled. Since 8.10.2026 a sheet must come back on the grid and at the sizes its message asks for, or `props.py` rejects it whole and it is drawn again (see "A sheet off its measures is rejected" below). The figures are cut left to right, so the order in the message is the order of the names.
 
 Sizes are in band pixels, the same pixels as Ferro's 40 from ear tips to paws. The band is 82 pixels tall and her paws stand 80 pixels below the top, so a prop on the grass can be up to about 60 pixels tall.
 
@@ -383,3 +383,34 @@ Rules for this sheet:
 
 
 The ships needed no new drawing: Vatra wanted them far in the background, then in front of the forest at the edge of the meadow and taller than the trees (7.10.2026), and there the drawings of `props-ships.png` are big enough as they are.
+
+### A sheet off its measures is rejected (8.10.2026)
+
+Vatra saw Orthanc in the band again and it was broken, though ChatGPT's drawing was good: the message asked for a grid of 128 pixels across, ChatGPT drew on one of 175, and `props.py` guessed that grid and cut across the four horns, which were thinner than one of its pixels. Vatra: give the measure from the start, demand the limit, and if a sheet is not right, reject the file and ask for a new one. Nothing is rescaled or repaired to make a sheet fit.
+
+How it works for every new prop sheet:
+- The sheet gets its grid in `assets/props.json` (`sheets`: pixels across and down) and each of its props the size asked (`size`: width and height in those pixels).
+- `python tools/props.py --template <sheet>` draws `assets/ref/template-<sheet>.png`: the grid on magenta with a checkerboard box per object, at its size, left to right. Attach it to the message: it is the measure, as a picture, because ChatGPT has ignored measures given in numbers.
+- After the new sheet is saved in `assets/src/`, `python tools/props.py` checks it: its pixels must be the grid's (within 5%), the image the grid's height, each figure its size (within 10% or 2 pixels) and no taller than its place. If anything is off it prints REJECTED with what is off, its props stay out of the mod, and the same message goes to ChatGPT again (in a new chat, so it does not edit the rejected image).
+- A sheet that passes is still shown to Vatra side by side with ChatGPT's drawing (`preview/props.html`) before it goes into the mod.
+
+Sheets cut before the rule (`props-ground`, `props-ships`, `props-far`) carry `approved_by_eye`: Vatra saw them in the band, so they are not checked.
+
+### Orthanc, Barad-dur and Minas Tirith on the template (8.10.2026)
+
+`props-far-fantasy.png` was rejected: `props.py` found its pixels 10.1 source pixels for the grid's 13.9 (175 across instead of 128), Orthanc 31 x 36 grid pixels for 18 x 32, Barad-dur 40 x 38 for 26 x 32, Minas Tirith 45 x 30 for 36 x 28. Attach `assets/ref/template-props-far-fantasy.png` and the rejected `assets/src/props-far-fantasy.png` (for the look); save the result as `assets/src/props-far-fantasy.png`.
+
+```text
+Redraw the second attached image (the three towers and cities) on the first attached image, the template. Same three, left to right, same pale hazy bluish colours, the same glowing orange eye on the middle tower, on a flat solid pure magenta (#FF00FF) background.
+
+The template is the measure, and it is strict:
+- The template is a grid of 128 pixels across and 64 down: one square of its checkerboard is one pixel. Draw on exactly this grid: every pixel one solid square block of that size, lined up with the checkerboard. The image is twice as wide as it is tall, like the template.
+- Each grey box is the exact size of one object: the black spire fills the left box (18 pixels wide, 32 tall), the dark tower with the eye the middle box (26 wide, 32 tall), the white city the right box (36 wide, 28 tall). Each fills its box's height, stands on the box's bottom edge and stays inside it.
+- No detail smaller than one pixel: every horn, spike, tier and window is at least one whole pixel wide, with at least one pixel of magenta between horns or spikes. With so few pixels, simplify rather than draw thinner.
+- Do not draw the checkerboard or the boxes: only the three drawings on magenta.
+
+Rules for this sheet:
+- The bottom third of each will be hidden behind hills, so keep what makes it recognisable (the four horns of the spire, the eye, the white tiers and the tower of the city) in its top two thirds.
+- Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
+- No text, no labels.
+```

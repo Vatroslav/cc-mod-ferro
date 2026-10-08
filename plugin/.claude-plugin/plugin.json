@@ -1,6 +1,6 @@
 {
   "name": "cc-mod-ferro",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Ferro (a Norwich Terrier) runs across a pixel-art meadow in a band above the prompt while Claude works on a long turn; now and then she stops to sit, sniff, drink or poop, she runs past things on the meadow, and after 5 minutes she falls asleep",
   "author": { "name": "Vatroslav Mileusnić" },
   "types": "./types/index.d.ts"

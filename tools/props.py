@@ -1,8 +1,18 @@
 """Cuts the props she runs past (assets/src/props-*.png, ChatGPT) into real pixels: one pixel per
 ChatGPT pixel, on its own grid, with a palette of its own per figure (median cut over its pixels,
 like the bowls). Scaling a drawing down to a set height lost most of its detail and broke its
-outline into stray dots (Vatra, 7.10.2026), so a prop is as big as ChatGPT drew it, and one that is
-too big for its place is drawn again, smaller (MAX_H).
+outline into stray dots (Vatra, 7.10.2026), so a prop is as big as ChatGPT drew it.
+
+A sheet is cut only if ChatGPT drew it to the measures it was asked for (Vatra, 8.10.2026: if it is
+not good, reject the file and ask for a new one). Guessing the grid of a sheet drawn off it cut
+across its pixels: Orthanc's four horns were thinner than one of its blocks and broke. So the
+message asks for a grid over the whole image (`grid` of the sheet in the registry: pixels across and
+down) and a size for each object (`size` of the prop), and a sheet whose pixels are off that grid, or
+with a figure off its size or too tall for its place, is rejected whole: its props stay out of the
+mod and ChatGPT draws it again. Nothing is rescaled or repaired to make it fit. Sheets cut before
+the rule carry `approved_by_eye` (Vatra saw them in the band) and are not checked.
+`python tools/props.py --template <sheet>` draws the grid and the box of each object as an image to
+attach to the message (assets/ref/template-<sheet>.png).
 
 The registry is assets/props.json, one entry per prop: its sheet, where it stands ("ground": on the
 meadow, behind or in front of her; "far": behind the hills; "edge": at the far edge of the meadow, in
@@ -15,6 +25,7 @@ Run (from the repo root): python tools/props.py
 """
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -34,10 +45,38 @@ SUBGRID = 0.7  # see pixel_size
 # the edge of the meadow in front of the forest on row 56 (scene.py). A taller drawing is not shrunk, because that
 # loses its detail (Vatra, 7.10.2026): ChatGPT draws it again, smaller.
 MAX_H = {"ground": 70, "far": 53, "edge": 56}
+# How far a sheet may be off what was asked before it is rejected: its pixel size off the grid's
+# (image width / pixels across), and a figure off its size, by a share or at least SIZE_SLACK pixels.
+GRID_TOLERANCE = 0.05
+SIZE_TOLERANCE = 0.10
+SIZE_SLACK = 2
+TEMPLATE_W = 1536  # the width of a template image; its pixels are TEMPLATE_W / pixels across
 
 
 def registry() -> list[dict]:
     return json.loads(REGISTRY.read_text(encoding="utf-8"))["props"]
+
+
+def sheets() -> dict[str, dict]:
+    return json.loads(REGISTRY.read_text(encoding="utf-8"))["sheets"]
+
+
+def check(spec: dict, shape: tuple[int, ...], size: float, mine: list[dict], found: list) -> list[str]:
+    """What is off the measures the sheet was asked for: nothing for a sheet drawn to them."""
+    across, down = spec["grid"]
+    block = shape[1] / across
+    problems = []
+    if abs(size / block - 1) > GRID_TOLERANCE:
+        problems.append(f"its pixels are {size:.1f} source pixels, the grid asked has {block:.1f} "
+                        f"({shape[1] / size:.0f} across instead of {across})")
+    if abs(shape[0] / block - down) > GRID_TOLERANCE * down:
+        problems.append(f"the image is {shape[0] / block:.0f} grid pixels down instead of {down}")
+    for p, (box, _) in zip(mine, found):
+        w, h = (box[1].stop - box[1].start) / block, (box[0].stop - box[0].start) / block
+        aw, ah = p["size"]
+        if any(abs(got - want) > max(SIZE_SLACK, SIZE_TOLERANCE * want) for got, want in ((w, aw), (h, ah))):
+            problems.append(f"{p['name']} is {w:.0f} x {h:.0f} grid pixels, asked {aw} x {ah}")
+    return problems
 
 
 def figures(rgb: np.ndarray, bg: np.ndarray) -> list[tuple[tuple[slice, slice], np.ndarray]]:
@@ -155,7 +194,8 @@ def cut(rgb: np.ndarray, own: np.ndarray, p: float, outline: bool) -> np.ndarray
 def main() -> None:
     PREVIEW_SRC.mkdir(parents=True, exist_ok=True)
     props = registry()
-    too_big = []
+    specs = sheets()
+    too_big, rejected = [], {}
     names = [p["name"] for p in props]
     assert len(set(names)) == len(names), "two props with the same name"
     # a ground slot takes a ground prop, a far slot a far one or one at the edge
@@ -164,6 +204,9 @@ def main() -> None:
         assert total <= 100, f"the chances of the {' and '.join(pool)} props add up to {total}, over 100"
     for sheet in dict.fromkeys(p["sheet"] for p in props):
         mine = [p for p in props if p["sheet"] == sheet]
+        spec = specs.get(sheet, {})
+        assert "grid" in spec or "approved_by_eye" in spec, f"{sheet}: give it the grid asked in the sheets of props.json"
+        assert "grid" not in spec or all("size" in p for p in mine), f"{sheet}: give each prop the size asked"
         if not (SRC / f"{sheet}.png").exists():
             # a sheet ChatGPT has not drawn yet: its props stay out of the mod
             for p in mine:
@@ -174,22 +217,67 @@ def main() -> None:
         bg = background_mask(rgb)
         bg |= fringe_mask(rgb, bg)
         found = figures(rgb, bg)
-        assert len(found) == len(mine), f"{sheet}: {len(found)} figures, the registry names {len(mine)}"
-        size = pixel_size([energies(rgb[box], own) for box, own in found])
-        print(f"{sheet}: a ChatGPT pixel is {size:.2f} source pixels")
-        for p, (box, own) in zip(mine, found):
-            out = cut(rgb[box], own, size, p["where"] != "far")
+        if len(found) != len(mine):
+            problems = [f"{len(found)} figures, the registry names {len(mine)}"]
+        else:
+            size = pixel_size([energies(rgb[box], own) for box, own in found])
+            print(f"{sheet}: a ChatGPT pixel is {size:.2f} source pixels")
+            problems = check(spec, rgb.shape, size, mine, found) if "grid" in spec else []
+        cuts = []
+        if not problems:
+            for p, (box, own) in zip(mine, found):
+                out = cut(rgb[box], own, size, p["where"] != "far")
+                cuts.append(out)
+                if out.shape[0] > MAX_H[p["where"]]:
+                    if "grid" in spec:
+                        problems.append(f"{p['name']} is {out.shape[0]} pixels tall, at most {MAX_H[p['where']]}")
+                    else:
+                        too_big.append(p["name"])
+        if problems:
+            # rejected whole: none of its props goes into the mod until ChatGPT draws it again
+            rejected[sheet] = problems
+            for p in mine:
+                (OUT / f"prop-{p['name']}.png").unlink(missing_ok=True)
+            print(f"{sheet}: REJECTED, so {', '.join(p['name'] for p in mine)} stay out of the mod "
+                  "until ChatGPT draws it again:")
+            for x in problems:
+                print("  " + x)
+            continue
+        for p, (box, own), out in zip(mine, found, cuts):
             Image.fromarray(out, "RGBA").save(OUT / f"prop-{p['name']}.png")
             src = np.dstack([rgb[box], np.where(own, 255, 0).astype(np.uint8)])
             Image.fromarray(src, "RGBA").save(PREVIEW_SRC / f"{p['name']}.png")
-            big = out.shape[0] > MAX_H[p["where"]]
-            if big:
-                too_big.append(p["name"])
+            big = p["name"] in too_big
             print(f"{p['name']}: {out.shape[1]} x {out.shape[0]} ({p['where']}, {p['chance']}%)"
                   + (f" TOO TALL, at most {MAX_H[p['where']]}: draw it again, smaller" if big else ""))
-    page(props)
+    page(props, rejected)
     if too_big:
         print("too tall:", ", ".join(too_big))
+
+
+def template(sheet: str) -> None:
+    """The measures of a sheet as an image to attach to its ChatGPT message: on magenta, a box for
+    each object, left to right as the message lists them, at its size on the sheet's grid, its
+    bottom on the same line 4 pixels above the bottom. Each box is a checkerboard of the grid's
+    pixels, so it shows both how big the object is and how big one pixel is."""
+    mine = [p for p in registry() if p["sheet"] == sheet]
+    across, down = sheets()[sheet]["grid"]
+    gap = (across - sum(p["size"][0] for p in mine)) / (len(mine) + 1)
+    assert gap >= 4, f"{sheet}: the objects do not fit {across} pixels across with room between them"
+    cells = np.zeros((down, across), dtype=np.uint8)  # 0 magenta, 1 and 2 the checkerboard
+    x, bottom = gap, down - 4
+    for p in mine:
+        w, h = p["size"]
+        x0, y0 = round(x), bottom - h
+        yy, xx = np.mgrid[y0:bottom, x0 : x0 + w]
+        cells[y0:bottom, x0 : x0 + w] = 1 + (yy + xx) % 2
+        x += w + gap
+    colours = np.array([[255, 0, 255], [235, 235, 235], [190, 190, 190]], dtype=np.uint8)
+    img = Image.fromarray(colours[cells]).resize((TEMPLATE_W, TEMPLATE_W * down // across), Image.NEAREST)
+    path = ROOT / "assets" / "ref" / f"template-{sheet}.png"
+    img.save(path)
+    print(f"{path.relative_to(ROOT)}: {across} x {down} grid pixels, "
+          + ", ".join(f"{p['name']} {p['size'][0]} x {p['size'][1]}" for p in mine))
 
 
 PREVIEW = ROOT / "preview"
@@ -218,8 +306,14 @@ PAGE = """<!doctype html>
 """
 
 
-def page(props: list[dict]) -> None:
+def page(props: list[dict], rejected: dict[str, list[str]]) -> None:
     rows = []
+    for sheet, problems in rejected.items():
+        rows.append(
+            f'  <h3>{sheet} <small>REJECTED: its props stay out of the mod until ChatGPT draws it again</small></h3>\n'
+            f'  <ul>{"".join(f"<li>{x}</li>" for x in problems)}</ul>\n'
+            f'  <img class="src" src="../assets/src/{sheet}.png" width="600">'
+        )
     for p in props:
         if not (OUT / f"prop-{p['name']}.png").exists():
             continue
@@ -242,4 +336,7 @@ def page(props: list[dict]) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:2] == ["--template"]:
+        template(sys.argv[2])
+    else:
+        main()
