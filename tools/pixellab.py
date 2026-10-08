@@ -19,6 +19,7 @@ it itself and never prints it.
 Run (from the repo root):
   python tools/pixellab.py balance          what is left on the account
   python tools/pixellab.py draw <prop>      candidates in preview/pixellab/<prop>/, the page
+  python tools/pixellab.py page <prop>      the page again from the saved candidates (no call)
   python tools/pixellab.py pick <prop> <n>  candidate n becomes assets/src/<sheet>.png; then
                                             python tools/props.py and python tools/scene.py
 """
@@ -120,16 +121,10 @@ def draw(name: str) -> None:
     out = PREVIEW / "pixellab" / name
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
-    passed = []
+    (out / "job.txt").write_text(job["background_job_id"], encoding="utf-8")
     for i, im in enumerate(found):
         im.save(out / f"{i}.png")
-        problems, _ = native_check(np.asarray(im), p)
-        if problems:
-            print(f"  {i}: {im.width} x {im.height}, rejected: {'; '.join(problems)}")
-        else:
-            passed.append(i)
-    print(f"{name}: {len(found)} candidates, {len(passed)} pass: {passed}")
-    page(name, passed, len(found))
+    page(name)
 
 
 def pick(name: str, i: str) -> None:
@@ -138,28 +133,96 @@ def pick(name: str, i: str) -> None:
     print(f"{name}: candidate {i} is {(SRC / (p['sheet'] + '.png')).relative_to(ROOT)}")
 
 
-def page(name: str, passed: list[int], total: int) -> None:
+PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Ferro - NAME from PixelLab</title>
+<style>
+  body { font: 14px system-ui, sans-serif; background: #2a2a2a; color: #ddd; margin: 16px; }
+  .bar { position: sticky; top: 0; background: #2a2a2a; padding: 8px 0 12px; z-index: 1; }
+  .bar button { font: inherit; padding: 4px 12px; margin-right: 6px; }
+  #status { margin-top: 8px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+  .card { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 3px solid #444; border-radius: 6px; }
+  .card.keep { border-color: #3c3; }
+  .card.drop { display: none; }
+  .pics { display: flex; gap: 8px; align-items: flex-end; }
+  .card button { font: inherit; flex: 1; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  img { background: #9cc7e8; image-rendering: pixelated; }
+</style></head><body>
+<div class="bar">
+  <b>NAME</b>: PASSED of TOTAL PixelLab candidates pass the measures. Keep or drop each one; "Next round"
+  makes the kept ones the new set (when none is kept, it drops only the dropped ones). The choices stay
+  after a reload. Ferro in the band for scale: <img src="../assets/px/run-0.png" width="152" height="88"><br>
+  <button id="next">Next round</button><button id="back">Previous round</button><button id="reset">Start over</button>
+  <div id="status"></div>
+</div>
+<div class="grid">
+CELLS
+</div>
+<script>
+const KEY = "pixellab-NAME-JOB";
+const ALL = [IDS];
+let s = JSON.parse(localStorage.getItem(KEY) || "null") || { rounds: [ALL], marks: {} };
+const save = () => localStorage.setItem(KEY, JSON.stringify(s));
+const pool = () => s.rounds[s.rounds.length - 1];
+function show() {
+  const p = pool();
+  for (const card of document.querySelectorAll(".card")) {
+    const id = +card.dataset.id, m = s.marks[id];
+    card.style.display = p.includes(id) ? "" : "none";
+    card.className = "card" + (m ? " " + m : "");
+  }
+  const kept = p.filter(id => s.marks[id] === "keep"), dropped = p.filter(id => s.marks[id] === "drop");
+  document.getElementById("status").textContent =
+    `Round ${s.rounds.length}: ${p.length} in the set, ${kept.length} kept, ${dropped.length} dropped, ` +
+    `${p.length - kept.length - dropped.length} left to decide. Kept: ${kept.join(", ") || "none"}. ` +
+    `In the set: ${p.filter(id => s.marks[id] !== "drop").join(", ")}.`;
+  save();
+}
+document.querySelectorAll(".card button").forEach(b => b.onclick = () => {
+  const id = +b.closest(".card").dataset.id;
+  s.marks[id] = s.marks[id] === b.dataset.mark ? undefined : b.dataset.mark;
+  show();
+});
+document.getElementById("next").onclick = () => {
+  const p = pool(), kept = p.filter(id => s.marks[id] === "keep");
+  const next = kept.length ? kept : p.filter(id => s.marks[id] !== "drop");
+  s.rounds.push(next); s.marks = {}; show();
+};
+document.getElementById("back").onclick = () => { if (s.rounds.length > 1) { s.rounds.pop(); s.marks = {}; show(); } };
+document.getElementById("reset").onclick = () => { s = { rounds: [ALL], marks: {} }; show(); };
+show();
+</script>
+</body></html>
+"""
+
+
+def page(name: str) -> None:
+    """Gates the saved candidates of a prop and writes preview/pixellab.html, where Vatra keeps or
+    drops them round by round until one is left."""
+    p = next(q for q in registry() if q["name"] == name)
+    out = PREVIEW / "pixellab" / name
+    ids = sorted(int(f.stem) for f in out.glob("*.png"))
+    passed = []
+    for i in ids:
+        problems, _ = native_check(np.asarray(Image.open(out / f"{i}.png").convert("RGBA")), p)
+        if problems:
+            print(f"  {i}: rejected: {'; '.join(problems)}")
+        else:
+            passed.append(i)
+    print(f"{name}: {len(ids)} candidates, {len(passed)} pass: {passed}")
     cells = []
     for i in passed:
-        w, h = Image.open(PREVIEW / "pixellab" / name / f"{i}.png").size
-        cells.append(f'<div><img src="pixellab/{name}/{i}.png" width="{w * ZOOM}" height="{h * ZOOM}">'
-                     f'<img src="pixellab/{name}/{i}.png" width="{w * 2}" height="{h * 2}"><b>{i}</b></div>')
-    (PREVIEW / "pixellab.html").write_text(
-        f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Ferro - {name} from PixelLab</title>
-<style>
-  body {{ font: 14px system-ui, sans-serif; background: #2a2a2a; color: #ddd; margin: 16px; }}
-  .grid {{ display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }}
-  .grid div {{ display: flex; gap: 8px; align-items: flex-end; }}
-  img {{ background: #9cc7e8; image-rendering: pixelated; }}
-</style></head><body>
-<p>{name}: {len(passed)} of {total} PixelLab candidates pass the measures (written by tools/pixellab.py,
-not committed). Each: enlarged {ZOOM}x, then at the size the band shows it, then its number.
-Ferro in the band for scale: <img src="../assets/px/run-0.png" width="152" height="88"></p>
-<div class="grid">
-{chr(10).join(cells)}
-</div></body></html>
-""", encoding="utf-8")
+        w, h = Image.open(out / f"{i}.png").size
+        cells.append(f'<div class="card" data-id="{i}"><div class="pics">'
+                     f'<img src="pixellab/{name}/{i}.png" width="{w * ZOOM}" height="{h * ZOOM}">'
+                     f'<img src="pixellab/{name}/{i}.png" width="{w * 2}" height="{h * 2}"></div>'
+                     f'<div class="row"><b>{i}</b><button data-mark="keep">Keep</button>'
+                     f'<button data-mark="drop">Drop</button></div></div>')
+    job = (out / "job.txt").read_text(encoding="utf-8").strip() if (out / "job.txt").exists() else "0"
+    html = (PAGE.replace("NAME", name).replace("PASSED", str(len(passed))).replace("TOTAL", str(len(ids)))
+            .replace("CELLS", "\n".join(cells)).replace("JOB", job).replace("IDS", ", ".join(map(str, passed))))
+    (PREVIEW / "pixellab.html").write_text(html, encoding="utf-8")
     print(f"preview/pixellab.html: {len(passed)} candidates")
 
 
@@ -169,6 +232,8 @@ if __name__ == "__main__":
         balance()
     elif cmd[:1] == ["draw"] and len(cmd) == 2:
         draw(cmd[1])
+    elif cmd[:1] == ["page"] and len(cmd) == 2:
+        page(cmd[1])
     elif cmd[:1] == ["pick"] and len(cmd) == 3:
         pick(cmd[1], cmd[2])
     else:
