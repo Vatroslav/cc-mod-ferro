@@ -391,7 +391,7 @@ Vatra saw Orthanc in the band again and it was broken, though ChatGPT's drawing 
 How it works for every new prop sheet:
 - The sheet gets its grid in `assets/props.json` (`sheets`: pixels across and down) and each of its props the size asked (`size`: width and height in those pixels).
 - `python tools/props.py --template <sheet>` draws `assets/ref/template-<sheet>.png`: the grid on magenta with a checkerboard box per object, at its size, left to right. Attach it to the message: it is the measure, as a picture, because ChatGPT has ignored measures given in numbers.
-- After the new sheet is saved in `assets/src/`, `python tools/props.py` checks it: its pixels must be the grid's (within 5%), the image the grid's height, each figure its size (within 10% or 2 pixels) and no taller than its place. If anything is off it prints REJECTED with what is off, its props stay out of the mod, and the same message goes to ChatGPT again (in a new chat, so it does not edit the rejected image).
+- After the new sheet is saved in `assets/src/`, `python tools/props.py` checks it: its pixels must be the grid's (within 5%), the image the grid's height, each figure its size (within 10% or 2 pixels) and no taller than its place. If anything is off it prints REJECTED with what is off, its props stay out of the mod, and the message goes to ChatGPT again in a new chat, with only the template attached: a rejected sheet attached for its look anchors ChatGPT to its sizes (see below).
 - A sheet that passes is still shown to Vatra side by side with ChatGPT's drawing (`preview/props.html`) before it goes into the mod.
 
 Sheets cut before the rule (`props-ground`, `props-ships`, `props-far`) carry `approved_by_eye`: Vatra saw them in the band, so they are not checked.
@@ -408,6 +408,29 @@ The template is the measure, and it is strict:
 - Each grey box is the exact size of one object: the black spire fills the left box (18 pixels wide, 32 tall), the dark tower with the eye the middle box (26 wide, 32 tall), the white city the right box (36 wide, 28 tall). Each fills its box's height, stands on the box's bottom edge and stays inside it.
 - No detail smaller than one pixel: every horn, spike, tier and window is at least one whole pixel wide, with at least one pixel of magenta between horns or spikes. With so few pixels, simplify rather than draw thinner.
 - Do not draw the checkerboard or the boxes: only the three drawings on magenta.
+
+Rules for this sheet:
+- The bottom third of each will be hidden behind hills, so keep what makes it recognisable (the four horns of the spire, the eye, the white tiers and the tower of the city) in its top two thirds.
+- Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
+- No text, no labels.
+```
+
+Second try (8.10.2026, both images attached as above): rejected again. ChatGPT ignored the template and redrew the attached sheet at the same sizes, with even smaller pixels: 5.6 source pixels for the grid's 13.9 (315 across instead of 128), Orthanc 30 x 35 grid pixels for 18 x 32, Barad-dur 40 x 36 for 26 x 32, Minas Tirith 45 x 28 for 36 x 28. Not saved in the repo.
+
+Third try: attach only `assets/ref/template-props-far-fantasy.png`, the look in words. Save the result as `assets/src/props-far-fantasy.png`.
+
+```text
+Draw three buildings far in the distance for a pixel-art game, on the attached image, the template. Keep its flat solid pure magenta (#FF00FF) background and replace each grey checkerboard box with one building:
+- Left box: Orthanc, a tall black stone spire with four sharp horns at the top, standing on a small green hill.
+- Middle box: Barad-dur, a dark jagged tower on a dark mountain with thin red lava streams, a glowing orange eye between two horns at its top.
+- Right box: Minas Tirith, a white city in tiers on a green hill, with a tall white tower at the top.
+All three in pale, hazy, bluish colours, as if seen from far away; only the eye and the lava glow.
+
+The template is the measure, and it is strict:
+- The template is a grid of 128 pixels across and 64 down: one square of its checkerboard is one pixel. Draw on exactly this grid: every pixel one solid square block of that size, lined up with the checkerboard. The image is twice as wide as it is tall, like the template.
+- Each grey box is the exact size of one building: the left box is 18 pixels wide and 32 tall, the middle 26 wide and 32 tall, the right 36 wide and 28 tall. Each building fills its box's height, stands on the box's bottom edge and stays inside it. Do not move, enlarge or add anything.
+- No detail smaller than one pixel: every horn, spike, tier and window is at least one whole pixel wide, with at least one pixel of magenta between horns or spikes. With so few pixels, simplify rather than draw thinner.
+- Do not draw the checkerboard or the boxes: only the three buildings on magenta.
 
 Rules for this sheet:
 - The bottom third of each will be hidden behind hills, so keep what makes it recognisable (the four horns of the spire, the eye, the white tiers and the tower of the city) in its top two thirds.
