@@ -439,3 +439,24 @@ Rules for this sheet:
 ```
 
 Third try (8.10.2026, only the template attached): rejected. The sizes came close (Orthanc 19 x 34 grid pixels for 18 x 32, Minas Tirith 39 x 31 for 36 x 28, Barad-dur 29 x 37 for 26 x 32, the only one off), but ChatGPT drew with pixels of 5.9 source pixels for the grid's 13.9 (299 across instead of 128): about twice the detail asked. Vatra did not like its Minas Tirith. Not saved in the repo.
+
+Fourth try: attach only `assets/ref/template-props-far-fantasy.png`. Minas Tirith looked like a generic castle (Vatra: square white walls on a green hill), so it is described by what makes it Minas Tirith: seven curved tiers against a dark mountain, the rock spur cutting through them like a ship's prow, the tall white tower on top. The pixels are asked as a tiny image enlarged, because the checkerboard did not hold them. Save the result as `assets/src/props-far-fantasy.png`.
+
+```text
+Draw three buildings far in the distance for a pixel-art game, on the attached image, the template. Keep its flat solid pure magenta (#FF00FF) background and replace each grey checkerboard box with one building:
+- Left box: Orthanc, a tall black stone spire with four sharp horns at the top, standing on a small green hill.
+- Middle box: Barad-dur, a dark jagged tower on a dark mountain with thin red lava streams, a glowing orange eye between two horns at its top.
+- Right box: Minas Tirith, the white city of seven tiers built against the foot of a dark grey mountain that rises behind it. Each tier is a curved white wall, each higher one smaller and set back, like the steps of a round cake seen from the side. A huge grey rock spur juts forward out of the mountain like the prow of a ship and cuts through the middle of all the tiers up to the top one. On the top tier, at the tip of the spur, one very tall, slender white tower. It must not look like a generic castle with square walls.
+All three in pale, hazy, bluish colours, as if seen from far away; only the eye and the lava glow.
+
+The template is the measure, and it is strict:
+- The template is a grid of 128 pixels across and 64 down: one square of its checkerboard is one pixel. The result must look like a tiny image of 128 x 64 pixels enlarged 14 times: every pixel one solid square block exactly the size of a checkerboard square, lined up with the checkerboard. The image is twice as wide as it is tall, like the template.
+- Each grey box is the exact size of one building: the left box is 18 pixels wide and 32 tall, the middle 26 wide and 32 tall, the right 36 wide and 28 tall. Each building fills its box's height, stands on the box's bottom edge and stays inside it, the eye, the horns and the towers included. Do not move, enlarge or add anything.
+- No detail smaller than one pixel: every horn, spike, tier and window is at least one whole pixel wide, with at least one pixel of magenta between horns or spikes. With so few pixels, simplify rather than draw thinner.
+- Do not draw the checkerboard or the boxes: only the three buildings on magenta.
+
+Rules for this sheet:
+- The bottom third of each will be hidden behind hills, so keep what makes it recognisable (the four horns of the spire, the eye, the white tiers, the rock spur and the tower of the city) in its top two thirds.
+- Crisp hard pixels, no anti-aliasing, no gradients, no dark outline.
+- No text, no labels.
+```
