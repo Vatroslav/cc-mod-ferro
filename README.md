@@ -6,7 +6,7 @@ A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a tur
 
 ## What Ferro does
 
-Every turn picks a meadow, a program for the run and whether she chases a ball, all at random. A program is a run with a stop every 6 to 12 seconds, the first one too: she sits, sniffs, drinks, looks around, listens, eats a piece of bread or poops, never the same thing twice in a row and poops at most once. The scenes below have one stop each, 9 seconds in.
+Every turn picks a meadow, a program for the run and whether she chases a ball, all at random. A program is a run with a moment every 6 to 12 seconds, the first one too. In about three moments of ten nothing happens and she just runs on; in the rest she sits, sniffs, drinks, looks around, listens, eats a piece of bread or poops, never the same thing twice in a row and poops at most once. The scenes below have one stop each, 9 seconds in.
 
 On the way she runs past things on the meadow, behind her or in front of her: a rock, a tuft of grass, a bush, a beach ball, a knight's helmet, a sword stuck in the ground. About every 10 seconds of running something comes in from the right, picked anew on every turn by its chance, and a few are rare easter eggs (a landed spaceship now and then). The library is `assets/props.json`, one line per prop.
 

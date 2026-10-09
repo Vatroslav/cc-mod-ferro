@@ -66,6 +66,10 @@ PROGRAMS = 10  # per background
 # seconds of running between two stops. 12-22 until 7.10.2026, when Vatra wanted less waiting for
 # something to happen (the first stop came after 16 s then)
 GAP_S = (6.0, 12.0)
+# in this share of the gaps nothing comes and she runs on for another gap (Vatra, 9.10.2026). The
+# first gap of exactly this share of a background's programs is such a gap, like the first stops'
+# WEIGHTS shares
+SKIP = 0.3
 SEED = 6
 # drinking came in at 0.1 of the first stops, taken from sitting (7.10.2026). Looking around,
 # listening and eating bread came in at 0.1 each (0.13.0, 7.10.2026), taken from sitting (0.4 to
@@ -801,17 +805,28 @@ def ball_layer(ground_pts: list, shift_pts: list, stops: list[tuple[float, float
     return f'<defs>{sprite_def("ball", "ball.png")}</defs>' + chased + resting
 
 
+def gap(rng: random.Random, skip: bool | None = None) -> float:
+    """Seconds of running before the next stop: a GAP_S gap, and after each gap in which nothing
+    comes (SKIP of them, or the first one when `skip`) another one."""
+    s = rng.uniform(*GAP_S)
+    while (rng.random() < SKIP) if skip is None else skip:
+        s += rng.uniform(*GAP_S)
+        skip = None
+    return round(s, 1)
+
+
 def draw_programs(rng: random.Random, stops: dict[str, Stop]) -> list[list[tuple[float, str]]]:
     """PROGRAMS runs, each a list of (seconds of running before the stop, kind of stop)."""
     firsts = [kind for kind, w in WEIGHTS.items() for _ in range(round(w * PROGRAMS))]
     assert len(firsts) == PROGRAMS, "the WEIGHTS shares must come out whole in PROGRAMS"
+    skips = set(rng.sample(range(PROGRAMS), round(SKIP * PROGRAMS)))
     programs = []
-    for kind in firsts:
+    for i, kind in enumerate(firsts):
         # the first stop comes after a gap like every later one (Vatra, 7.10.2026)
-        first_s = round(rng.uniform(*GAP_S), 1)
+        first_s = gap(rng, i in skips)
         program, t, pooped = [(first_s, kind)], first_s + stops[kind].dur, kind in POOPS
         while True:
-            run_s = round(rng.uniform(*GAP_S), 1)
+            run_s = gap(rng)
             if t + run_s >= PROGRAM_S:
                 break
             kinds = [k for k in WEIGHTS if k != kind and not (pooped and k in POOPS)]
