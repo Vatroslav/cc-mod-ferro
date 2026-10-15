@@ -24,6 +24,9 @@ const program = atom({ plugin: 'cc-mod-ferro', key: 'program' } as const, 0)
 const ball = atom({ plugin: 'cc-mod-ferro', key: 'ball' } as const, false)
 // What stands in the program's prop slots this turn (run.ts), picked per turn by the props' chances.
 const props = atom({ plugin: 'cc-mod-ferro', key: 'props' } as const, { ground: [], far: [] } as PropPicks)
+// Closed with the band's Close button: she stays away for the rest of the turn, the next turn
+// shows her again.
+const closed = atom({ plugin: 'cc-mod-ferro', key: 'closed' } as const, false)
 
 export const register: Register = on => {
   let timers: Timer[] = []
@@ -35,6 +38,7 @@ export const register: Register = on => {
   on('turn.start', async ($, e, next) => {
     cancelTimers()
     await update($, phase, () => null)
+    await update($, closed, () => false)
     const background = Math.floor(Math.random() * SCENES.length)
     await update($, scene, () => background)
     const run = Math.floor(Math.random() * SCENES[background].programs.length)
@@ -67,7 +71,7 @@ export const register: Register = on => {
       return next(e)
     }
     const now = await read($, phase)
-    if (now === null) {
+    if (now === null || (await read($, closed))) {
       return next(e)
     }
     // Ferro is only a pastime, so any band drawn beneath her (the files a delete prompt is about,
@@ -78,7 +82,7 @@ export const register: Register = on => {
       return beneath
     }
 
-    const { Box, Svg } = $.ui.resolve(e)
+    const { Box, Button, Svg } = $.ui.resolve(e)
     const s = SCENES[await read($, scene)] ?? SCENES[0]
     const p = s.programs[await read($, program)] ?? s.programs[0]
     const withBall = await read($, ball)
@@ -93,7 +97,8 @@ export const register: Register = on => {
     const width = Math.min(SCENE_MAX_WIDTH, Math.max(300, e.props.bodyColumns * PX_PER_COLUMN - 8))
 
     // Drawn as an image (no isInteractive): only then does the band render the PNG frames, and
-    // SMIL animates there too.
+    // SMIL animates there too. The Close button sits beside the scene, not in it: as a dismiss
+    // button Desktop draws it as its own close control at the band's trailing edge.
     return (
       <Box>
         <Svg
@@ -102,6 +107,7 @@ export const register: Register = on => {
           width={width}
           height={s.height}
         />
+        <Button key="close" role="dismiss" label="Close" onPress={() => void update($, closed, () => true)} />
       </Box>
     )
   })

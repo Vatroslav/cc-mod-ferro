@@ -2,7 +2,7 @@
 
 <img src="preview/ball-sit.svg" width="100%" alt="Ferro, a pixel-art Norwich Terrier, chasing an orange ball across a scrolling meadow, then sitting down to look at you">
 
-A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a turn for longer than 20 seconds, a band opens above the prompt and Ferro, a Norwich Terrier, runs across a pixel-art meadow. When the turn ends, the band disappears. Nothing is interactive, so there is nothing to miss when you are not looking.
+A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a turn for longer than 20 seconds, a band opens above the prompt and Ferro, a Norwich Terrier, runs across a pixel-art meadow. When the turn ends, the band disappears. The scene itself is not interactive, so there is nothing to miss when you are not looking; the band's close button sends her away for the rest of the turn, and the next turn brings her back.
 
 ## What Ferro does
 

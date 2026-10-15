@@ -1,4 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
+import { pickProp, runScene } from './run'
+import { PROPS, SCENES, SLEEP_INTRO_MS } from './scene'
 
 // Tests without a real session: the clock is fake and the test moves it. Under the mod sits the
 // test's "Claude Code", which answers the band as the real engine does when no plugin draws it:
@@ -67,7 +69,6 @@ test('after 20 s Ferro runs, after 5 min she sleeps, on the same background', as
 })
 
 test('once she has lain down she sleeps on without lying down again', async ($: any, on) => {
-  const { SCENES, SLEEP_INTRO_MS } = await import('./scene')
   const { clock } = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(300_000)
@@ -110,6 +111,26 @@ test('the end of the main turn closes the band, the end of a subagent does not',
   expect((await band($)).svg).toBeUndefined()
 })
 
+test('Close hides her for the rest of the turn, the next turn shows her again', async ($: any, on) => {
+  const { clock } = setup(on)
+  await $.turn.start({ text: 'x', turnId: 't1' })
+  await clock.advance(25_000)
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'AbovePrompt', props: props() })
+  expect((await ui.find({ type: 'Button', key: 'close' }))?.props.role).toBe('dismiss')
+  await ui.press({ key: 'close' })
+  await ui.unmount()
+  const gone = await band($)
+  expect(gone.svg).toBeUndefined()
+  expect(gone.isEngine).toBe(true)
+  // falling asleep later in the same turn does not bring her back
+  await clock.advance(300_000)
+  expect((await band($)).svg).toBeUndefined()
+  await $.turn.complete(complete('t1'))
+  await $.turn.start({ text: 'x', turnId: 't2' })
+  await clock.advance(20_000)
+  expect((await band($)).svg).toBeDefined()
+})
+
 test("when Claude is not working or in the terminal, the band is not Ferro's", async ($: any, on) => {
   const { clock } = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
@@ -137,7 +158,6 @@ test('the scene is drawn as an image: the sandboxed frame does not render the PN
 })
 
 test('the scenes of every background fit the Svg element limit', async () => {
-  const { SCENES } = await import('./scene')
   expect(SCENES.length).toBeGreaterThan(0)
   for (const s of SCENES) {
     expect(s.programs.length).toBeGreaterThan(0)
@@ -153,7 +173,6 @@ test('the scenes of every background fit the Svg element limit', async () => {
 })
 
 test('every turn picks a program of its background', async ($: any, on) => {
-  const { SCENES } = await import('./scene')
   const { clock } = setup(on)
   const seen = new Set<string>()
   for (let i = 0; i < 40; i++) {
@@ -175,8 +194,6 @@ test('every turn picks a program of its background', async ($: any, on) => {
 })
 
 test('a slot gets a prop by the chances, the rest of 100 is an empty slot', async () => {
-  const { PROPS } = await import('./scene')
-  const { pickProp } = await import('./run')
   for (const where of ['ground', 'far'] as const) {
     // a far slot takes a prop behind the hills or one at the edge of the meadow
     const mine = PROPS.map((p, i) => ({ ...p, i })).filter(p =>
@@ -196,8 +213,6 @@ test('a slot gets a prop by the chances, the rest of 100 is an empty slot', asyn
 })
 
 test('the props stand in the slots of the program, with the drawings of the picked ones only', async () => {
-  const { PROPS, SCENES } = await import('./scene')
-  const { runScene } = await import('./run')
   const s = SCENES[0]
   const p = s.programs[0]
   const g = PROPS.findIndex(q => q.where === 'ground')
@@ -213,8 +228,6 @@ test('the props stand in the slots of the program, with the drawings of the pick
 })
 
 test('every slot taken, with the ball, a run still fits the Svg element limit', async () => {
-  const { PROPS, SCENES } = await import('./scene')
-  const { runScene } = await import('./run')
   const ground = PROPS.map((q, i) => i).filter(i => PROPS[i].where === 'ground')
   const far = PROPS.map((q, i) => i).filter(i => PROPS[i].where !== 'ground')
   for (const s of SCENES) {
