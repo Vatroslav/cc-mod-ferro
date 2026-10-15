@@ -17,6 +17,11 @@ verified:
     how: >-
       In Desktop: Ferro, already asleep in a conversation, lay down again from the standing frame
       every time he opened that conversation
+  - by: human:vatra
+    at: 2026-10-15T09:30:00+02:00
+    how: >-
+      In Desktop (Claude Code 2.1.295), a new session with the installed 0.15.0: the band's
+      dismiss Button showed and closing it worked
 stale_after: 2026-12-06T00:00:00+01:00
 ---
 
@@ -54,6 +59,9 @@ every few days, so check again when the mod misbehaves after an update.
 
 - `ui.render` on `AbovePrompt` is raised on the terminal and desktop surfaces only. With no `Svg`
   in the terminal, the mod works only in the Code tab of Desktop.
+- A `Button` with `role="dismiss"` beside the `Svg` (0.15.0) gives the band a close control in
+  Desktop; Vatra used it on 15.10.2026 (2.1.295). The `claude` 2.1.281 on the PATH drops `role`
+  in `claude plugin test`.
 - The engine draws nothing of its own in the band. When `next(e)` resolves to
   `{ type: 'engine', ref }`, no plugin beneath drew anything, and Ferro may draw.
 
