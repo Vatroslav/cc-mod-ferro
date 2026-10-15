@@ -18,7 +18,7 @@ verified:
       In Desktop: Ferro, already asleep in a conversation, lay down again from the standing frame
       every time he opened that conversation
   - by: human:vatra
-    at: 2026-10-15T09:30:00+02:00
+    at: 2026-10-15T09:45:00+02:00
     how: >-
       In Desktop (Claude Code 2.1.295), a new session with the installed 0.15.0: the band's
       dismiss Button showed and closing it worked
