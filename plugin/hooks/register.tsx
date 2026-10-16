@@ -11,6 +11,12 @@ const RUN_AFTER_MS = 20_000
 // When Claude works for too long, Ferro lies down and falls asleep.
 const SLEEP_AFTER_MS = 300_000
 const PX_PER_COLUMN = 8
+// Room the scene leaves for the Close button. When another mod wraps her band in its own Box
+// (cc-mod-running-task adds its rows below her), Desktop drew the button inline as a plain "Close"
+// button beside the scene, and with the scene the full width of the band it was pushed out of the
+// band and cut off (Vatra's screenshot, 16.10.2026, Claude Code 2.1.299). 10 columns (~80 px) is an
+// estimate from that screenshot, where the cut button looked about 45-60 px wide; not measured.
+const CLOSE_COLUMNS = 10
 // In about a third of the turns she chases an orange ball.
 const BALL_SHARE = 1 / 3
 
@@ -93,8 +99,9 @@ export const register: Register = on => {
 
     // Without an explicit width the frame stays at 300 px. Desktop counts the band in columns
     // of ~8 CSS pixels (measured 4.10.2026: 94 columns, ~753 px). On a narrower band the scene
-    // is cropped at the sides and the pixels keep their size.
-    const width = Math.min(SCENE_MAX_WIDTH, Math.max(300, e.props.bodyColumns * PX_PER_COLUMN - 8))
+    // is cropped at the sides and the pixels keep their size. CLOSE_COLUMNS keep the Close button
+    // inside the band when it is drawn inline.
+    const width = Math.min(SCENE_MAX_WIDTH, Math.max(300, (e.props.bodyColumns - CLOSE_COLUMNS) * PX_PER_COLUMN - 8))
 
     // Drawn as an image (no isInteractive): only then does the band render the PNG frames, and
     // SMIL animates there too. The Close button sits beside the scene, not in it: as a dismiss

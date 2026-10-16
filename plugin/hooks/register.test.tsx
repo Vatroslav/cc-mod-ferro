@@ -139,11 +139,12 @@ test("when Claude is not working or in the terminal, the band is not Ferro's", a
   expect((await band($, 'terminal')).svg).toBeUndefined()
 })
 
-test('the width follows the band, at most 1280 px', async ($: any, on) => {
+test('the width follows the band less room for the Close button, at most 1280 px', async ($: any, on) => {
   const { clock } = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(25_000)
-  expect((await band($, 'desktop', props(94))).svg?.props.width).toBe(744)
+  // 94 columns less 10 for the button: 84 * 8 - 8
+  expect((await band($, 'desktop', props(94))).svg?.props.width).toBe(664)
   expect((await band($, 'desktop', props(400))).svg?.props.width).toBe(1280)
   expect((await band($, 'desktop', props(10))).svg?.props.width).toBe(300)
 })

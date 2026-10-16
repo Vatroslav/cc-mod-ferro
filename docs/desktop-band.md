@@ -22,6 +22,12 @@ verified:
     how: >-
       In Desktop (Claude Code 2.1.295), a new session with the installed 0.15.0: the band's
       dismiss Button showed and closing it worked
+  - by: human:vatra
+    at: 2026-10-16T11:24:00+02:00
+    how: >-
+      Screenshot of the Desktop band (Claude Code 2.1.299) with the installed 0.15.0 and
+      cc-mod-running-task 0.1.1: the scene, the running-task row below it in the same band, and a
+      plain "Close" button cut off at the band's right edge
 stale_after: 2026-12-06T00:00:00+01:00
 ---
 
@@ -60,7 +66,14 @@ every few days, so check again when the mod misbehaves after an update.
 - `ui.render` on `AbovePrompt` is raised on the terminal and desktop surfaces only. With no `Svg`
   in the terminal, the mod works only in the Code tab of Desktop.
 - A `Button` with `role="dismiss"` beside the `Svg` (0.15.0) gives the band a close control in
-  Desktop; Vatra used it on 15.10.2026 (2.1.295). The `claude` 2.1.281 on the PATH drops `role`
+  Desktop; Vatra used it on 15.10.2026 (2.1.295). On 16.10.2026 (2.1.299), with cc-mod-running-task
+  wrapping her tree in its own `Box`, Desktop drew it inline as a plain "Close" button beside the
+  scene instead, cut off at the band's right edge. Not separated: the wrapping or the new build.
+  The types say only that a desktop draws its close control "at the site's trailing edge".
+- `bodyColumns` is the band's width less the engine's five columns at the right end, which hold
+  its `[-]` (types, 2.1.299).
+- The order of installed plugins in the `ui.render` chain is not defined by the types. On
+  16.10.2026 cc-mod-running-task was above Ferro (its rows below her scene in one band). The `claude` 2.1.281 on the PATH drops `role`
   in `claude plugin test`.
 - The engine draws nothing of its own in the band. When `next(e)` resolves to
   `{ type: 'engine', ref }`, no plugin beneath drew anything, and Ferro may draw.
