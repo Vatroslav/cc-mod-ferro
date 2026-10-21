@@ -6,7 +6,7 @@ A Claude Code mod for the Code tab of Claude Desktop. When Claude works on a tur
 
 ## What Ferro does
 
-Every turn picks a meadow, a program for the run and whether she chases a ball, all at random. A program is a run with a moment every 6 to 12 seconds, the first one too. In about three moments of ten nothing happens and she just runs on; in the rest she sits, sniffs, drinks, looks around, listens, eats a piece of bread or poops, never the same thing twice in a row and poops at most once. The scenes below have one stop each, 9 seconds in.
+Every turn picks a meadow, a program for the run and whether she chases a ball, all at random. A program is a run with a moment every 6 to 12 seconds, the first one too. In about three moments of ten nothing happens and she just runs on; in the rest she sits, sniffs, drinks, looks around, listens, eats a piece of bread or poops, never the same thing twice in a row; she poops at most once, and never in the first minute of the run, because the band starts the program from its beginning every time a conversation is opened. The scenes below have one stop each, 9 seconds in.
 
 On the way she runs past things on the meadow, behind her or in front of her: a rock, a tuft of grass, a bush, a beach ball, a knight's helmet, a sword stuck in the ground. About every 10 seconds of running something comes in from the right, picked anew on every turn by its chance, and a few are rare easter eggs (a landed spaceship now and then). The library is `assets/props.json`, one line per prop.
 
@@ -14,7 +14,7 @@ On the way she runs past things on the meadow, behind her or in front of her: a 
 
 <img src="preview/sit.svg" width="100%" alt="Ferro sits down on the meadow and looks at you">
 
-**Sniffs a spot** (the first stop in a tenth). She slows down with her head lowering, pushes her nose into the grass a few times, lifts her head and runs on.
+**Sniffs a spot** (the first stop in a fifth). She slows down with her head lowering, pushes her nose into the grass a few times, lifts her head and runs on.
 
 <img src="preview/sniff.svg" width="100%" alt="Ferro stops and sniffs a spot on the meadow">
 
@@ -22,11 +22,11 @@ On the way she runs past things on the meadow, behind her or in front of her: a 
 
 <img src="preview/drink.svg" width="100%" alt="Ferro runs to a red water bowl on the meadow and laps the water">
 
-**Looks around** (the first stop in a tenth). She stops, turns her head to you, looks back over her shoulder, turns forward again and runs on.
+**Looks around** (the first stop in a fifth). She stops, turns her head to you, looks back over her shoulder, turns forward again and runs on.
 
 <img src="preview/look.svg" width="100%" alt="Ferro stops on the meadow and looks around">
 
-**Listens** (the first stop in a tenth). She stops, lifts her head with her ears pricked, tilts it and runs on.
+**Listens** (the first stop in a fifth). She stops, lifts her head with her ears pricked, tilts it and runs on.
 
 <img src="preview/listen.svg" width="100%" alt="Ferro stops on the meadow and listens with her ears pricked">
 
@@ -34,11 +34,11 @@ On the way she runs past things on the meadow, behind her or in front of her: a 
 
 <img src="preview/bread.svg" width="100%" alt="Ferro finds a piece of bread on the meadow and eats it">
 
-**Poops while walking** (the first stop in a fifth), the way the real Ferro does: hunched, walking slowly forward, leaving a row of droppings that scrolls away with the grass.
+**Poops while walking** (never in the first minute of the run; after it, as likely as sitting), the way the real Ferro does: hunched, walking slowly forward, leaving a row of droppings that scrolls away with the grass.
 
 <img src="preview/run.svg" width="100%" alt="Ferro poops while walking across the meadow">
 
-**Poops in one spot** (the first stop in a tenth), the rare way.
+**Poops in one spot** (not in the first minute either; half as likely as pooping while walking), the rare way.
 
 <img src="preview/autumn-run-still.svg" width="100%" alt="Ferro stops and poops in one spot on the autumn meadow">
 
@@ -65,7 +65,7 @@ The reference sheet above goes into every ChatGPT request for new frames, so new
 **Rendering.** The Desktop band can draw an `Svg` element. Every frame and background layer is a small indexed-colour PNG in an `<image>` (data URI), defined once in `<defs>` and placed with `<use>`; `image-rendering="pixelated"` keeps the pixels sharp at 2x. The band renders `<image>` only when the `Svg` is drawn as an image, not in the sandboxed frame (`isInteractive`), so the mod draws it as an image. Until version 0.7.2 every frame was converted to vector strokes (one `<path>` per colour, one stroke per horizontal run of pixels), about six times the size. All animation is SMIL inside the SVG, so the mod draws the scene once and the browser engine animates it. `tools/scene.py` puts a run together from its stops (each kind of stop is one function that says which frames show when and how far the ground moves), draws ten programs per meadow with a fixed seed, since SMIL has no randomness, and writes them with the sleeping scene into one module per meadow (`plugin/hooks/scene-<meadow>.ts`, each under the 1 MiB the hooks loader reads) and `preview/`.
 
 **Constraints that shaped it.** The facts about Claude Code and the Desktop band behind them, with the build and the date they were last checked, are in [`docs/desktop-band.md`](docs/desktop-band.md).
-- The `Svg` element accepts at most 131,072 characters. A run is a head every program of a meadow shares (the meadow and every frame of every stop, about 57k) and the program's own timeline; the largest program with the ball is about 124k (winter), and the sleeping scene about 18k. The props a turn picks go in on top; should a run ever go over, the mod leaves out the last ones, which in a simulation of 3,000 turns never happened. As vector strokes a scene with a single stop was 85k to 118k, and winter with the ball came within 117 characters of the limit, so until the PNG frames each kind of stop was a scene of its own and a turn had one kind.
+- The `Svg` element accepts at most 131,072 characters. A run is a head every program of a meadow shares (the meadow and every frame of every stop, about 57k) and the program's own timeline; the largest program with the ball is about 120k (winter), and the sleeping scene about 18k. The props a turn picks go in on top; should a run ever go over, the mod leaves out the last ones, which in a simulation of 3,000 turns never happened. As vector strokes a scene with a single stop was 85k to 118k, and winter with the ball came within 117 characters of the limit, so until the PNG frames each kind of stop was a scene of its own and a turn had one kind.
 - The ball is a separate piece of SVG the mod inserts into the plain program, so no program is stored twice.
 - The loop is seamless: in one loop the ground travels a whole multiple of 20 meadow widths and the hills, at 0.35 of the ground speed, a whole multiple of 7. The run lasts at most 280 seconds before she falls asleep, so a program's stops fill those 280 seconds and a turn never sees the loop start again.
 - ChatGPT returned the gallop frames out of phase order, which made Ferro look like she was running backwards. The real order is `[4, 3, 2, 5, 0]`.

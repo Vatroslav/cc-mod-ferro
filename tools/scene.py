@@ -57,10 +57,10 @@ RUN_START = [(0.0, 0.0), (0.25, 6.0), (0.5, 20.0)]
 # the turn to 5 min, when she falls asleep; 3 min until 7.10.2026), so the stops start within PROGRAM_S and a turn ends
 # before the loop starts again. SMIL has no randomness, so the programs are drawn here with a
 # fixed seed and the mod picks one per turn. The first stops of a background's programs come in
-# exactly the WEIGHTS shares, because most turns see only the first one or two (measured
+# exactly the FIRSTS shares, because most turns see only the first one or two (measured
 # 6.10.2026 on 30 days of turns: half of the turns in which Ferro shows end before 79 s); the
-# later stops are drawn with the same weights. Never the same stop twice in a row, and she poops
-# at most once per run. Not every program has every stop.
+# later stops are drawn with the WEIGHTS. Never the same stop twice in a row, and she poops at
+# most once per run, never before POOP_AFTER_S. Not every program has every stop.
 PROGRAM_S = 280
 PROGRAMS = 10  # per background
 # seconds of running between two stops. 12-22 until 7.10.2026, when Vatra wanted less waiting for
@@ -68,7 +68,7 @@ PROGRAMS = 10  # per background
 GAP_S = (6.0, 12.0)
 # in this share of the gaps nothing comes and she runs on for another gap (Vatra, 9.10.2026). The
 # first gap of exactly this share of a background's programs is such a gap, like the first stops'
-# WEIGHTS shares
+# FIRSTS shares
 SKIP = 0.3
 SEED = 6
 # drinking came in at 0.1 of the first stops, taken from sitting (7.10.2026). Looking around,
@@ -78,6 +78,14 @@ SEED = 6
 WEIGHTS = {"sit": 0.2, "sniff": 0.1, "drink": 0.1, "look": 0.1, "listen": 0.1, "bread": 0.1, "walkPoop": 0.2,
            "stillPoop": 0.1}
 POOPS = {"walkPoop", "stillPoop"}
+# No poop starts before this many seconds of the run (Vatra, 21.10.2026: she pooped too often when he
+# opened a conversation). The band starts the program from its beginning whenever it draws it anew,
+# so the first stops are the ones seen again and again, and poop was the first stop of 3 programs in
+# 10: watching 30 s after opening a conversation, he saw her poop in 30% of the turns, 60 s in 75%.
+POOP_AFTER_S = 60.0
+# The first stops' shares, as WEIGHTS without the poops: their three tenths went to sniffing,
+# looking around and listening, the shortest stops and the least seen
+FIRSTS = {"sit": 0.2, "sniff": 0.2, "drink": 0.1, "look": 0.2, "listen": 0.2, "bread": 0.1}
 SAYS = {"sit": "sits", "sniff": "sniffs", "walkPoop": "poops while walking", "stillPoop": "poops in one spot",
         "drink": "drinks", "look": "looks around", "listen": "listens", "bread": "eats bread"}
 
@@ -264,7 +272,7 @@ def svg_head(defs: list[str], meadow: dict) -> str:
 
 
 # What Ferro does at a stop. Each kind is a function that returns a Stop; a new kind is one more
-# function here and one more entry in WEIGHTS and SAYS.
+# function here and one more entry in WEIGHTS, FIRSTS and SAYS.
 @dataclass
 class Stop:
     """What Ferro does between two runs. Times are seconds from the moment she stops running.
@@ -817,8 +825,9 @@ def gap(rng: random.Random, skip: bool | None = None) -> float:
 
 def draw_programs(rng: random.Random, stops: dict[str, Stop]) -> list[list[tuple[float, str]]]:
     """PROGRAMS runs, each a list of (seconds of running before the stop, kind of stop)."""
-    firsts = [kind for kind, w in WEIGHTS.items() for _ in range(round(w * PROGRAMS))]
-    assert len(firsts) == PROGRAMS, "the WEIGHTS shares must come out whole in PROGRAMS"
+    firsts = [kind for kind, w in FIRSTS.items() for _ in range(round(w * PROGRAMS))]
+    assert len(firsts) == PROGRAMS, "the FIRSTS shares must come out whole in PROGRAMS"
+    assert not POOPS & set(FIRSTS), "a first stop comes before POOP_AFTER_S"
     skips = set(rng.sample(range(PROGRAMS), round(SKIP * PROGRAMS)))
     programs = []
     for i, kind in enumerate(firsts):
@@ -829,7 +838,8 @@ def draw_programs(rng: random.Random, stops: dict[str, Stop]) -> list[list[tuple
             run_s = gap(rng)
             if t + run_s >= PROGRAM_S:
                 break
-            kinds = [k for k in WEIGHTS if k != kind and not (pooped and k in POOPS)]
+            too_soon = t + run_s < POOP_AFTER_S
+            kinds = [k for k in WEIGHTS if k != kind and not ((pooped or too_soon) and k in POOPS)]
             kind = rng.choices(kinds, [WEIGHTS[k] for k in kinds])[0]
             pooped = pooped or kind in POOPS
             program.append((run_s, kind))
