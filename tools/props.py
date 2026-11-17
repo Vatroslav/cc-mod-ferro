@@ -19,6 +19,13 @@ ChatGPT never held the grid (four tries for Orthanc, 8.10.2026), so a prop can a
 image (assets/src/prop-<name>.png), nothing to cut. It passes the same gate (`native_check`): only
 fully opaque or fully clear pixels, its size, its place.
 
+A sheet ChatGPT drew on its own, unasked, can still come in when Vatra approves it by eye
+(`props-ground-2`, 17.11.2026). Its spec may say how it differs: `background: "checkerboard"` for
+ChatGPT's drawn picture of transparency instead of magenta, `extra_colors` for small parts in a colour
+of their own that the figure's 20 colours miss (the blue gem on the sword in the stone, three pixels,
+went grey), and `figures` to name every figure of the sheet in order when the registry uses only
+some of them (its hedgehog was not readable and is drawn again on a sheet of its own).
+
 The registry is assets/props.json, one entry per prop: its sheet, where it stands ("ground": on the
 meadow, behind or in front of her; "far": behind the hills; "edge": at the far edge of the meadow, in
 front of the forest) and its chance in percent per slot (see
@@ -56,6 +63,9 @@ GRID_TOLERANCE = 0.05
 SIZE_TOLERANCE = 0.10
 SIZE_SLACK = 2
 TEMPLATE_W = 1536  # the width of a template image; its pixels are TEMPLATE_W / pixels across
+# A sheet's extra colours go to pixels the figure's 20 colours miss by more than this (sum of the
+# channel differences), as build.py does for the winter meadow.
+MISSED = 60
 
 
 def registry() -> list[dict]:
@@ -103,6 +113,17 @@ def native_check(img: np.ndarray, p: dict) -> tuple[list[str], np.ndarray | None
     if h > MAX_H[p["where"]]:
         problems.append(f"{h} pixels tall, at most {MAX_H[p['where']]}")
     return problems, out
+
+
+def checkerboard_mask(rgb: np.ndarray) -> np.ndarray:
+    """A drawn checkerboard, ChatGPT's picture of transparency: the light grey and white squares
+    connected to the edge of the image. Light grey inside a figure (a beard, a mushroom's spots) is
+    not connected to it, so it stays."""
+    a = rgb.astype(int)
+    light = (a.max(2) - a.min(2) < 14) & (a.min(2) > 205)
+    lab, _ = ndimage.label(light)
+    edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
+    return np.isin(lab, edge[edge > 0])
 
 
 def figures(rgb: np.ndarray, bg: np.ndarray) -> list[tuple[tuple[slice, slice], np.ndarray]]:
@@ -185,30 +206,42 @@ def grid_lines(energy: np.ndarray, p: float) -> list[int]:
     return lines + [n + 1]
 
 
-def cut(rgb: np.ndarray, own: np.ndarray, p: float, outline: bool) -> np.ndarray:
+def cut(rgb: np.ndarray, own: np.ndarray, p: float, outline: bool, extra: int = 0) -> np.ndarray:
     """One figure as RGBA real pixels, one per ChatGPT pixel (p source pixels): each takes the most
     common colour of the middle of its block, so the blocks' blurred edges do not vote. With
-    `outline`, the edge is cleaned as Ferro's is (stray pixels removed, the dark outline closed)."""
-    q = Image.fromarray(rgb[own].reshape(1, -1, 3)).quantize(COLORS, method=Image.Quantize.MEDIANCUT, kmeans=10)
+    `outline`, the edge is cleaned as Ferro's is (stray pixels removed, the dark outline closed).
+    With `extra`, the pixels the figure's 20 colours miss by more than MISSED get up to that many
+    colours of their own, and every pixel goes to the nearest colour of the larger palette."""
+    pixels = rgb[own]
+    q = Image.fromarray(pixels.reshape(1, -1, 3)).quantize(COLORS, method=Image.Quantize.MEDIANCUT, kmeans=10)
     pal = np.array(q.getpalette()[: COLORS * 3]).reshape(-1, 3)
-    idx = np.full(own.shape, COLORS, dtype=np.int16)
-    idx[own] = np.asarray(q).ravel()
+    index = np.asarray(q).ravel()
+    if extra:
+        missed = pixels[np.abs(pixels.astype(int) - pal[index]).sum(1) > MISSED]
+        if len(missed):
+            n = min(extra, len(np.unique(missed, axis=0)))
+            more = Image.fromarray(missed.reshape(1, -1, 3)).quantize(n, method=Image.Quantize.MEDIANCUT, kmeans=10)
+            pal = np.vstack([pal, np.array(more.getpalette()[: n * 3]).reshape(-1, 3)])
+            index = np.abs(pixels.astype(int)[:, None, :] - pal[None].astype(int)).sum(2).argmin(1)
+    clear = len(pal)
+    idx = np.full(own.shape, clear, dtype=np.int16)
+    idx[own] = index
     es = energies(rgb, own)
     rows, cols = grid_lines(es[0], p), grid_lines(es[1], p)
-    px = np.full((len(rows) - 1, len(cols) - 1), COLORS, dtype=np.int16)
+    px = np.full((len(rows) - 1, len(cols) - 1), clear, dtype=np.int16)
     for y, (y0, y1) in enumerate(zip(rows, rows[1:])):
         my = (y1 - y0) // 4
         for x, (x0, x1) in enumerate(zip(cols, cols[1:])):
             mx = (x1 - x0) // 4
-            counts = np.bincount(idx[y0 + my : y1 - my, x0 + mx : x1 - mx].ravel(), minlength=COLORS + 1)
-            if counts[COLORS] * 2 < counts.sum():
-                counts[COLORS] = 0
+            counts = np.bincount(idx[y0 + my : y1 - my, x0 + mx : x1 - mx].ravel(), minlength=clear + 1)
+            if counts[clear] * 2 < counts.sum():
+                counts[clear] = 0
                 px[y, x] = counts.argmax()
     if outline:
         dark = {i for i, c in enumerate(pal) if c.sum() < 200}
-        clean_edges(px, COLORS, dark, set(), int(pal.sum(1).argmin()))
+        clean_edges(px, clear, dark, set(), int(pal.sum(1).argmin()))
     # rows and columns left empty at the edges
-    solid = px != COLORS
+    solid = px != clear
     ys, xs = np.where(solid)
     px, solid = px[ys.min() : ys.max() + 1, xs.min() : xs.max() + 1], solid[ys.min() : ys.max() + 1, xs.min() : xs.max() + 1]
     out = np.zeros((*px.shape, 4), dtype=np.uint8)
@@ -253,19 +286,27 @@ def main() -> None:
             print(f"{p['name']}: {out.shape[1]} x {out.shape[0]} ({p['where']}, {p['chance']}%, real pixels)")
             continue
         rgb = np.asarray(Image.open(SRC / f"{sheet}.png").convert("RGB"))
-        bg = background_mask(rgb)
-        bg |= fringe_mask(rgb, bg)
+        if spec.get("background") == "checkerboard":
+            bg = checkerboard_mask(rgb)
+        else:
+            bg = background_mask(rgb)
+            bg |= fringe_mask(rgb, bg)
         found = figures(rgb, bg)
-        if len(found) != len(mine):
-            problems = [f"{len(found)} figures, the registry names {len(mine)}"]
+        # every figure of the sheet in order; the registry may use only some of them
+        names = spec.get("figures", [p["name"] for p in mine])
+        assert {p["name"] for p in mine} <= set(names), f"{sheet}: a prop not among its figures"
+        if len(found) != len(names):
+            problems = [f"{len(found)} figures, the registry names {len(names)}"]
         else:
             size = pixel_size([energies(rgb[box], own) for box, own in found])
             print(f"{sheet}: a ChatGPT pixel is {size:.2f} source pixels")
+            by_name = dict(zip(names, found))
+            found = [by_name[p["name"]] for p in mine]
             problems = check(spec, rgb.shape, size, mine, found) if "grid" in spec else []
         cuts = []
         if not problems:
             for p, (box, own) in zip(mine, found):
-                out = cut(rgb[box], own, size, p["where"] != "far")
+                out = cut(rgb[box], own, size, p["where"] != "far", spec.get("extra_colors", 0))
                 cuts.append(out)
                 if out.shape[0] > MAX_H[p["where"]]:
                     if "grid" in spec:

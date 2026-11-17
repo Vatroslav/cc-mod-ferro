@@ -462,3 +462,30 @@ Rules for this sheet:
 ```
 
 Fourth try (8.10.2026, only the template attached): rejected. Minas Tirith now has the tiers, the spur, the mountain and the tower, but the pixels were 7.4 source pixels for the grid's 13.9 (238 across instead of 128) and every building came out bigger than its box: Orthanc 22 x 36 grid pixels for 18 x 32, Barad-dur 33 x 37 for 26 x 32, Minas Tirith 45 x 32 for 36 x 28. At its own pixels Orthanc would be about 67 pixels tall in the band, over the 53 a far prop may have, so it fails on any grid. Over four tries ChatGPT's pixel was 10.1, 5.6, 5.9 and 7.4 source pixels for the 13.9 asked: it does not hold a grid, with the measures in numbers or as a template. Not saved in the repo.
+
+### Meadow objects, and the hedgehog again (17.11.2026)
+
+`assets/src/props-ground-2.png` is a sheet ChatGPT drew outside this Project (the message is not in the repo): a stump, mushrooms, a signpost, a garden gnome, a curled-up hedgehog, a bonfire with a sword in it, a sword in a stone and magic ore, each on a tuft of grass, on a drawn checkerboard instead of magenta. No measures were asked, so nothing could be checked against them; Vatra approved seven of them by eye (`preview/variants/meadow-props.html`, next to Ferro at band size) and they went into the mod as `approved_by_eye`. ChatGPT drew it on one grid: 7.52 source pixels a pixel (204 across) over the whole sheet, and six of the eight figures measured 7.3-7.7 on their own. A second ChatGPT image of the same objects (four variants each, labelled "76 x 44 px, 4 frames") was not used: the labels were invented, and every sprite had a grid of its own, from 4 to 8 source pixels.
+
+The hedgehog was left out (Vatra: "you cannot tell it is a hedgehog"): curled up, asleep and facing the viewer, it has no snout and no legs, and at 28 pixels tall it is a brown ball, in ChatGPT's drawing too. It is drawn again on its own sheet. The grid asked is the one ChatGPT used for the meadow objects, 204 x 136, and its size, 24 x 14, is about half of Ferro's length, as a hedgehog is next to a Norwich Terrier.
+
+The hedgehog (attach only `assets/ref/template-props-hedgehog.png`, in a new chat; save as `assets/src/props-hedgehog.png` and run `python tools/props.py`):
+
+```text
+Sprite sheet: one hedgehog that stands on the meadow in Ferro's strip. No dog in this image.
+
+The hedgehog: a European hedgehog walking to the right, seen exactly from the side. It must read as a hedgehog at a tiny size, so show what makes one: a pointed snout with a black nose tip at the right, one small black eye, a low round body under a dome of brown spines with light tips, a light tan face and belly, and four short dark legs with the feet visible under the body. Not curled up, not facing the viewer, not asleep.
+
+Measures:
+- The attached template is the measure. It is a grid of 204 pixels across and 136 down: one square of its checkerboard is one pixel. Draw on exactly this grid: every pixel one solid square block of that size, lined up with the checkerboard. The image has the template's size and shape.
+- The hedgehog fills the checkerboard box: 24 pixels long from the tail to the tip of the nose and 14 pixels tall from the soles of its feet to the top of its spines. That is about one eighth of the image width and one tenth of its height. Do not draw it bigger.
+- It stands where the box is, with its feet on the bottom of the box.
+- No detail smaller than one pixel. With so few pixels, simplify rather than draw thinner: the eye, the nose tip and each foot are whole pixels.
+- Do not draw the checkerboard or the box: only the hedgehog on magenta.
+
+Rules for this sheet:
+- No grass under it, no ground, no shadow, no flowers.
+- Pixel-art style like Ferro: crisp hard pixels, dark 1-pixel outline, no anti-aliasing, no gradients, lit from the top left.
+- Never magenta or purple in the hedgehog.
+- Flat solid pure magenta (#FF00FF) background, no text, no labels.
+```

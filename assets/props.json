@@ -2,15 +2,30 @@
   "sheets": {
     "props-ground": {"approved_by_eye": "7.10.2026"},
     "props-ships": {"approved_by_eye": "7.10.2026"},
-    "props-far": {"approved_by_eye": "7.10.2026"}
+    "props-far": {"approved_by_eye": "7.10.2026"},
+    "props-ground-2": {
+      "approved_by_eye": "17.11.2026",
+      "background": "checkerboard",
+      "extra_colors": 4,
+      "figures": ["stump", "mushrooms", "signpost", "gnome", "hedgehog-curled", "bonfire", "sword-in-stone", "magic-ore"]
+    },
+    "props-hedgehog": {"grid": [204, 136]}
   },
   "props": [
-    {"name": "rock", "sheet": "props-ground", "where": "ground", "chance": 28},
-    {"name": "tuft", "sheet": "props-ground", "where": "ground", "chance": 28},
-    {"name": "bush", "sheet": "props-ground", "where": "ground", "chance": 18},
-    {"name": "beach-ball", "sheet": "props-ground", "where": "ground", "chance": 12},
-    {"name": "helmet", "sheet": "props-ground", "where": "ground", "chance": 6},
-    {"name": "sword", "sheet": "props-ground", "where": "ground", "chance": 5},
+    {"name": "rock", "sheet": "props-ground", "where": "ground", "chance": 22},
+    {"name": "tuft", "sheet": "props-ground", "where": "ground", "chance": 22},
+    {"name": "bush", "sheet": "props-ground", "where": "ground", "chance": 14},
+    {"name": "beach-ball", "sheet": "props-ground", "where": "ground", "chance": 9},
+    {"name": "helmet", "sheet": "props-ground", "where": "ground", "chance": 5},
+    {"name": "sword", "sheet": "props-ground", "where": "ground", "chance": 4},
+    {"name": "stump", "sheet": "props-ground-2", "where": "ground", "chance": 6},
+    {"name": "mushrooms", "sheet": "props-ground-2", "where": "ground", "chance": 6},
+    {"name": "signpost", "sheet": "props-ground-2", "where": "ground", "chance": 2},
+    {"name": "gnome", "sheet": "props-ground-2", "where": "ground", "chance": 1},
+    {"name": "bonfire", "sheet": "props-ground-2", "where": "ground", "chance": 1},
+    {"name": "sword-in-stone", "sheet": "props-ground-2", "where": "ground", "chance": 1},
+    {"name": "magic-ore", "sheet": "props-ground-2", "where": "ground", "chance": 1},
+    {"name": "hedgehog", "sheet": "props-hedgehog", "where": "ground", "chance": 3, "size": [24, 14]},
     {"name": "ship-1", "sheet": "props-ships", "where": "edge", "chance": 0.5},
     {"name": "ship-2", "sheet": "props-ships", "where": "edge", "chance": 0.5},
     {"name": "ship-3", "sheet": "props-ships", "where": "edge", "chance": 0.5},
