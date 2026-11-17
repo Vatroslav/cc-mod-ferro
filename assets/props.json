@@ -8,8 +8,7 @@
       "background": "checkerboard",
       "extra_colors": 4,
       "figures": ["stump", "mushrooms", "signpost", "gnome", "hedgehog-curled", "bonfire", "sword-in-stone", "magic-ore"]
-    },
-    "props-hedgehog": {"grid": [204, 136]}
+    }
   },
   "props": [
     {"name": "rock", "sheet": "props-ground", "where": "ground", "chance": 22},
@@ -25,7 +24,6 @@
     {"name": "bonfire", "sheet": "props-ground-2", "where": "ground", "chance": 1},
     {"name": "sword-in-stone", "sheet": "props-ground-2", "where": "ground", "chance": 1},
     {"name": "magic-ore", "sheet": "props-ground-2", "where": "ground", "chance": 1},
-    {"name": "hedgehog", "sheet": "props-hedgehog", "where": "ground", "chance": 3, "size": [24, 14]},
     {"name": "ship-1", "sheet": "props-ships", "where": "edge", "chance": 0.5},
     {"name": "ship-2", "sheet": "props-ships", "where": "edge", "chance": 0.5},
     {"name": "ship-3", "sheet": "props-ships", "where": "edge", "chance": 0.5},

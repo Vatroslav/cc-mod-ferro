@@ -489,3 +489,5 @@ Rules for this sheet:
 - Never magenta or purple in the hedgehog.
 - Flat solid pure magenta (#FF00FF) background, no text, no labels.
 ```
+
+Not sent: Vatra dropped the hedgehog the same day (17.11.2026), because Ferro would chase it, not just run past it. The message and its template stay as a record.
