@@ -20,6 +20,8 @@ const CLOSE_COLUMNS = 10
 // In about a third of the turns she chases an orange ball.
 const BALL_SHARE = 1 / 3
 
+const PLUGIN = 'cc-mod-ferro'
+
 const phase = atom({ plugin: 'cc-mod-ferro', key: 'phase' } as const, null as FerroPhase)
 // This turn's background, an index into SCENES: picked at random on every turn.
 const scene = atom({ plugin: 'cc-mod-ferro', key: 'scene' } as const, 0)
@@ -80,9 +82,10 @@ export const register: Register = on => {
     if (now === null || (await read($, closed))) {
       return next(e)
     }
-    // Ferro is only a pastime, so any band drawn beneath her (the files a delete prompt is about,
-    // background tasks) goes first and she waits. `{ type: 'engine' }` is the engine's own band,
-    // which is empty: nobody beneath has anything to show.
+    // Ferro is only a pastime, so another mod's band goes first and she waits. Since Claude Code
+    // 2.1.325 every mod draws its own row and the `AbovePromptList` hook below takes hers out;
+    // before that the mods shared one row and a band drawn beneath her came back from `next(e)`.
+    // `{ type: 'engine' }` is the engine's own band, which is empty: nobody beneath drew her row.
     const beneath = await next(e)
     if (beneath.type !== 'engine') {
       return beneath
@@ -117,5 +120,16 @@ export const register: Register = on => {
         <Button key="close" role="dismiss" label="Close" onPress={() => void update($, closed, () => true)} />
       </Box>
     )
+  })
+
+  // The band stacks one row per mod that drew (Claude Code 2.1.325): while another mod has a row
+  // (the files a delete prompt is about, background tasks), hers is left out, and she runs again
+  // when it is gone.
+  on('ui.render', { component: 'AbovePromptList' }, async ($, e, next) => {
+    const others = e.props.rows.filter(row => row.plugin !== PLUGIN)
+    if (others.length === 0 || others.length === e.props.rows.length) {
+      return next(e)
+    }
+    return next({ ...e, props: { ...e.props, rows: others } })
   })
 }

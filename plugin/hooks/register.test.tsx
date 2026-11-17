@@ -2,10 +2,11 @@ import { expect, mock, test } from 'claude-code/testing'
 import { pickProp, runScene } from './run'
 import { PROPS, SCENES, SLEEP_INTRO_MS } from './scene'
 
-// Tests without a real session: the clock is fake and the test moves it. Under the mod sits the
-// test's "Claude Code", which answers the band as the real engine does when no plugin draws it:
-// { type: 'engine', ref: 0 }. With `beneath` set it stands for another mod beneath Ferro that has
-// something to show (the files of a delete prompt) and draws it as <Text>.
+// Tests without a real session: the clock is fake and the test moves it. The band is one row per
+// mod that draws (Claude Code 2.1.325). The test's own band hook draws the test's row: with `below`
+// set it stands for another mod that has something to show (the files of a delete prompt) and draws
+// it as <Text>; otherwise it passes and the row is empty. The kit answers Ferro's `next(e)` as the
+// engine does when nobody beneath draws: { type: 'engine', ref }.
 
 const PLUGIN = 'cc-mod-ferro'
 
@@ -18,9 +19,9 @@ function setup(on: any) {
   const below = { text: null as string | null }
   on('turn.start', async ($: any, e: any) => ({ turnId: e.turnId }))
   on('turn.complete', async () => ({ text: '' }))
-  on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any) => {
+  on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next: any) => {
     if (below.text === null) {
-      return { type: 'engine', ref: 0 }
+      return next(e)
     }
     const { Text } = $.ui.resolve(e)
     return <Text>{below.text}</Text>
@@ -86,7 +87,7 @@ test('once she has lain down she sleeps on without lying down again', async ($: 
   expect(s.asleep).not.toContain('href="#s')
 })
 
-test('a band drawn beneath Ferro goes first, and she runs again when it is gone', async ($: any, on) => {
+test("another mod's band goes first, and she runs again when it is gone", async ($: any, on) => {
   const { clock, below } = setup(on)
   await $.turn.start({ text: 'x', turnId: 't1' })
   await clock.advance(25_000)
